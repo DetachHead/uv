@@ -107,9 +107,9 @@ enum RequirementsTxtStatement {
     UnsupportedOption(UnsupportedOption),
 }
 
-/// A [Requirement] with additional metadata from the `requirements.txt`, currently only hashes but in
-/// the future also editable and similar information.
-#[derive(Clone, Eq, PartialEq, Hash)]
+/// A [`Requirement`] with additional metadata from `requirements.txt`, including hashes and build
+/// settings.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct RequirementEntry {
     /// The actual PEP 508 requirement.
     pub requirement: RequirementsTxtRequirement,
@@ -117,18 +117,6 @@ pub struct RequirementEntry {
     pub hashes: Vec<String>,
     /// Settings to pass to the build backend for this requirement.
     pub config_settings: Option<ConfigSettings>,
-}
-
-impl std::fmt::Debug for RequirementEntry {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut debug = formatter.debug_struct("RequirementEntry");
-        debug.field("requirement", &self.requirement);
-        debug.field("hashes", &self.hashes);
-        if let Some(config_settings) = &self.config_settings {
-            debug.field("config_settings", config_settings);
-        }
-        debug.finish()
-    }
 }
 
 // We place the impl here instead of next to `UnresolvedRequirementSpecification` because
@@ -2075,6 +2063,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                 ],
                 constraints: [],
@@ -2136,6 +2125,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                 ],
                 constraints: [],
@@ -2246,6 +2236,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                 ],
                 index_url: None,
@@ -2353,6 +2344,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Named(
@@ -2384,6 +2376,7 @@ mod test {
                         hashes: [
                             "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
                         ],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Named(
@@ -2415,6 +2408,7 @@ mod test {
                         hashes: [
                             "sha256:fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
                         ],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Named(
@@ -2444,6 +2438,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Named(
@@ -2473,6 +2468,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                 ],
                 constraints: [],
@@ -2600,6 +2596,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Unnamed(
@@ -2651,6 +2648,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Unnamed(
@@ -2706,6 +2704,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Unnamed(
@@ -2757,6 +2756,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Unnamed(
@@ -2808,6 +2808,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                     RequirementEntry {
                         requirement: Unnamed(
@@ -2863,6 +2864,7 @@ mod test {
                             },
                         ),
                         hashes: [],
+                        config_settings: None,
                     },
                 ],
                 constraints: [],
