@@ -136,9 +136,7 @@ pub(crate) enum ProjectError {
     )]
     LockFormat(PathBuf, usize, LockedSource),
 
-    #[error(
-        "Unable to find lockfile at `{1}`, but {0} was provided. To create a lockfile, run `uv lock` or `uv sync` without the flag."
-    )]
+    #[error("Unable to find lockfile at `{1}`, but {0} was provided.")]
     MissingLockfile(MissingLockfileSource, PathBuf),
 
     #[error(
@@ -422,6 +420,9 @@ impl uv_errors::Hinted for ProjectError {
             }
             Self::LockFormat(..) => uv_errors::Hints::from(
                 "To regenerate the lockfile, run `uv lock --refresh --preview-features lockfile-format-check`.",
+            ),
+            Self::MissingLockfile(..) => uv_errors::Hints::from(
+                "To create a lockfile, run `uv lock` or `uv sync` without the flag.",
             ),
             Self::OverlappingMarkers(_, rhs, replacement) => {
                 uv_errors::Hints::from(format!("replace `{rhs}` with `{replacement}`"))
