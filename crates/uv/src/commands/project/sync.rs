@@ -170,7 +170,7 @@ pub(crate) async fn sync(
     {
         Some(
             LockTarget::from(*manifest)
-                .read_frozen(MissingLockfileSource::from(source))
+                .read_frozen(MissingLockfileSource::from(source), LockCommand::Sync)
                 .await
                 .map_err(|err| match (err, *manifest) {
                     (ProjectError::MissingLockfile(..), SyncManifest::Script(script)) => anyhow::anyhow!(
