@@ -52,7 +52,7 @@ use crate::commands::pip::loggers::{
 use crate::commands::pip::operations::Modifications;
 use crate::commands::project::edit::{EditTarget, ProjectEdit, PythonTarget};
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::lock::LockMode;
+use crate::commands::project::lock::{LockCommand, LockMode};
 use crate::commands::project::lock_target::LockTarget;
 use crate::commands::project::sync::MalwareCheckContext;
 use crate::commands::project::{
@@ -1118,6 +1118,7 @@ async fn lock_and_sync(
     };
     let mut lock = Box::pin(
         project::lock::LockOperation::new(
+            LockCommand::Add,
             if let LockCheck::Enabled(lock_check) = lock_check {
                 LockMode::Locked(python_target.interpreter(), lock_check)
             } else if dry_run {
@@ -1248,6 +1249,7 @@ async fn lock_and_sync(
             // the addition of the minimum version specifiers.
             lock = Box::pin(
                 project::lock::LockOperation::new(
+                    LockCommand::Add,
                     if let LockCheck::Enabled(lock_check) = lock_check {
                         LockMode::Locked(python_target.interpreter(), lock_check)
                     } else if dry_run {

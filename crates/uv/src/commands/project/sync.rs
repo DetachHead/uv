@@ -52,7 +52,7 @@ use crate::commands::pip::resolution_markers;
 use crate::commands::pip::{operations, resolution_tags};
 use crate::commands::project::discovery::DiscoveredProject;
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::lock::{LockMode, LockOperation, LockResult};
+use crate::commands::project::lock::{LockCommand, LockMode, LockOperation, LockResult};
 use crate::commands::project::lock_target::LockTarget;
 use crate::commands::project::lockfile::FrozenWorkspace;
 use crate::commands::project::{
@@ -472,6 +472,7 @@ pub(crate) async fn sync(
             } else {
                 Box::pin(
                     LockOperation::new(
+                        LockCommand::Sync,
                         mode,
                         &settings.resolver,
                         &client_builder,

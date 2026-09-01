@@ -28,7 +28,7 @@ use crate::commands::pip::loggers::DefaultResolveLogger;
 use crate::commands::pip::resolution_markers;
 use crate::commands::project::discovery::DiscoveredProject;
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::lock::{LockMode, LockOperation};
+use crate::commands::project::lock::{LockCommand, LockMode, LockOperation};
 use crate::commands::project::lock_target::LockTarget;
 use crate::commands::project::lockfile::FrozenWorkspace;
 use crate::commands::project::{
@@ -233,6 +233,7 @@ pub(crate) async fn tree(
             let state = UniversalState::default();
             resolved_lock = match Box::pin(
                 LockOperation::new(
+                    LockCommand::Tree,
                     mode,
                     &settings,
                     client_builder,

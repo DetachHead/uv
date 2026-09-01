@@ -27,7 +27,7 @@ use crate::commands::pip::loggers::{SummaryInstallLogger, SummaryResolveLogger};
 use crate::commands::pip::operations::Modifications;
 use crate::commands::project::environment::CachedEnvironment;
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::lock::LockMode;
+use crate::commands::project::lock::{LockCommand, LockMode};
 use crate::commands::project::lock_target::LockTarget;
 use crate::commands::project::sync::MalwareCheckContext;
 use crate::commands::project::{
@@ -400,6 +400,7 @@ pub(crate) async fn check(
         };
         let result = match Box::pin(
             project::lock::LockOperation::new(
+                LockCommand::Check,
                 mode,
                 &settings.resolver,
                 &client_builder,
@@ -578,6 +579,7 @@ pub(crate) async fn check(
         let selection = PackageSelection::from_args(all_packages, &package, project.project_name());
         let result = match Box::pin(
             project::lock::LockOperation::new(
+                LockCommand::Check,
                 mode,
                 &settings.resolver,
                 &client_builder,

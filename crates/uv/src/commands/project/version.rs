@@ -34,7 +34,7 @@ use crate::commands::pip::loggers::{DefaultInstallLogger, DefaultResolveLogger};
 use crate::commands::pip::operations::Modifications;
 use crate::commands::project::edit::{ProjectEdit, PythonTarget};
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::lock::LockMode;
+use crate::commands::project::lock::{LockCommand, LockMode};
 use crate::commands::project::lock_target::LockTarget;
 use crate::commands::project::sync::MalwareCheckContext;
 use crate::commands::project::{
@@ -503,6 +503,7 @@ async fn print_frozen_version(
     // Lock and sync the environment, if necessary.
     let lock = match Box::pin(
         project::lock::LockOperation::new(
+            LockCommand::Version,
             LockMode::Frozen(frozen_source.into()),
             &settings.resolver,
             &client_builder,
@@ -648,6 +649,7 @@ async fn lock_and_sync(
     // Lock and sync the environment, if necessary.
     let lock = match Box::pin(
         project::lock::LockOperation::new(
+            LockCommand::Version,
             mode,
             &settings.resolver,
             &client_builder,
