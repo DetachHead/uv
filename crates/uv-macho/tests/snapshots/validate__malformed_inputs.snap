@@ -1,0 +1,12 @@
+---
+source: crates/uv-macho/tests/validate.rs
+expression: "failures.join(\"\\n\")"
+---
+fat: Unsupported Mach-O: expected a thin little-endian 64-bit dylib
+32-bit: Unsupported Mach-O: expected a thin little-endian 64-bit dylib
+swapped: Unsupported Mach-O: expected a thin little-endian 64-bit dylib
+executable: Unsupported Mach-O: expected a thin little-endian 64-bit dylib
+command count: Malformed Mach-O: invalid load-command count
+command size: Malformed Mach-O: invalid load-command size
+command alignment: Malformed Mach-O: invalid load-command size
+segment overlap: Malformed Mach-O: invalid or duplicate __TEXT segment
