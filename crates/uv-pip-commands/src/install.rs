@@ -1,29 +1,29 @@
 use std::collections::BTreeMap;
-use std::fmt::Write;
+use std::path::PathBuf;
 
-use anyhow::Result;
 use itertools::Itertools;
 use owo_colors::OwoColorize;
-use tracing::{debug, warn};
+use thiserror::Error;
+use tracing::{Level, debug, enabled, warn};
+
+use uv_errors::{Hinted, Hints};
 
 use uv_cache::Cache;
 use uv_client::{BaseClientBuilder, RegistryClientBuilder};
-use uv_command_support::{ExitStatus, Printer, UvError};
-use uv_configuration::PipInstallFormat;
 use uv_configuration::{
-    BuildIsolation, BuildOptions, Concurrency, Constraints, DryRun, ExtrasSpecification,
-    HashCheckingMode, IndexStrategy, NoSources, Reinstall, Upgrade,
+    BuildIsolation, BuildOptions, Concurrency, Constraints, DryRun, EditableMode,
+    ExcludeDependency, ExtrasSpecification, HashCheckingMode, IndexStrategy, KeyringProviderType,
+    Modifications, NoSources, Override, PipInstallFormat, Reinstall, TargetTriple, Upgrade,
 };
-use uv_configuration::{KeyringProviderType, TargetTriple};
 use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution::LoweredExtraBuildDependencies;
 use uv_distribution_types::{
-    ConfigSettings, DependencyMetadata, ExtraBuildVariables, Index, IndexLocations, Name, Origin,
-    PackageConfigSettings, Resolution,
+    ConfigSettings, DependencyMetadata, ExtraBuildVariables, Index, IndexLocations, Name,
+    NameRequirementSpecification, Origin, PackageConfigSettings, Requirement, Resolution,
 };
 use uv_fs::Simplified;
 use uv_install_wheel::LinkMode;
-use uv_installer::{InstallationStrategy, SitePackages};
+use uv_installer::{InstallationStrategy, SatisfiesResult, SitePackages};
 use uv_normalize::{DefaultExtras, DefaultGroups};
 use uv_pep440::Version;
 use uv_preview::{Preview, PreviewFeature};
@@ -44,29 +44,55 @@ use uv_warnings::warn_user;
 use uv_workspace::WorkspaceCache;
 use uv_workspace::pyproject::ExtraBuildDependencies;
 
-use crate::commands::install_report::write_install_report;
-use crate::commands::pip::reporters::report_target_environment;
-use crate::commands::pylock::{read_pylock_toml, resolve_pylock_toml};
-use uv_configuration::Modifications;
+use crate::install_report::write_install_report;
+use crate::pylock::{read_pylock_toml, resolve_pylock_toml};
+use crate::reporters::report_target_environment;
+use uv_command_support::{ExitStatus, Printer, UvError};
 use uv_install_operations::Changelog;
-use uv_install_operations::loggers::DefaultInstallLogger;
-use uv_python_context::PythonDownloadReporter;
-use uv_python_context::report_interpreter;
+use uv_install_operations::editable::apply_editable_mode;
+use uv_install_operations::loggers::{DefaultInstallLogger, InstallLogger};
+use uv_python_context::{PythonDownloadReporter, report_interpreter};
 use uv_resolve_operations::loggers::DefaultResolveLogger;
 use uv_resolve_operations::{resolution_markers, resolution_tags};
 
-/// Install a set of locked requirements into the current Python environment.
+/// The interpreter is externally managed and cannot be modified.
+#[derive(Debug, Error)]
+#[error("{message}")]
+pub struct ExternallyManagedError {
+    message: String,
+    root: PathBuf,
+    system: bool,
+}
+
+impl Hinted for ExternallyManagedError {
+    fn hints(&self) -> Hints<'_> {
+        if self.system {
+            Hints::from("Virtual environments were not considered due to the `--system` flag")
+        } else {
+            Hints::from("Consider creating a virtual environment, e.g., with `uv venv`")
+        }
+    }
+}
+
+/// Install packages into the current environment.
 #[expect(clippy::fn_params_excessive_bools)]
-pub(crate) async fn pip_sync(
+pub async fn pip_install(
     requirements: &[RequirementsSource],
     constraints: &[RequirementsSource],
+    overrides: &[RequirementsSource],
+    excludes: &[RequirementsSource],
     build_constraints: &[RequirementsSource],
+    constraints_from_workspace: Vec<Requirement>,
+    overrides_from_workspace: Vec<Override<Requirement>>,
+    excludes_from_workspace: Vec<ExcludeDependency>,
+    build_constraints_from_workspace: Vec<NameRequirementSpecification>,
+    editable: Option<EditableMode>,
     extras: &ExtrasSpecification,
     groups: &GroupsSpecification,
-    reinstall: Reinstall,
-    link_mode: LinkMode,
-    compile: bool,
-    hash_checking: Option<HashCheckingMode>,
+    resolution_mode: ResolutionMode,
+    prerelease: Prerelease,
+    dependency_mode: DependencyMode,
+    upgrade: Upgrade,
     index_locations: IndexLocations,
     index_strategy: IndexStrategy,
     torch_backend: Option<TorchMode>,
@@ -75,7 +101,10 @@ pub(crate) async fn pip_sync(
     dependency_metadata: DependencyMetadata,
     keyring_provider: KeyringProviderType,
     client_builder: &BaseClientBuilder<'_>,
-    allow_empty_requirements: bool,
+    reinstall: Reinstall,
+    link_mode: LinkMode,
+    compile: bool,
+    hash_checking: Option<HashCheckingMode>,
     installer_metadata: bool,
     config_settings: &ConfigSettings,
     config_settings_package: &PackageConfigSettings,
@@ -83,18 +112,19 @@ pub(crate) async fn pip_sync(
     extra_build_dependencies: &ExtraBuildDependencies,
     extra_build_variables: &ExtraBuildVariables,
     build_options: BuildOptions,
+    modifications: Modifications,
     python_version: Option<PythonVersion>,
     python_platform: Option<TargetTriple>,
     python_downloads: PythonDownloads,
     install_mirrors: PythonInstallMirrors,
     strict: bool,
     exclude_newer: ExcludeNewer,
+    sources: NoSources,
     python: Option<String>,
     system: bool,
     break_system_packages: bool,
     target: Option<Target>,
     prefix: Option<Prefix>,
-    sources: NoSources,
     python_preference: PythonPreference,
     python_arch: Option<PythonArchitecture>,
     concurrency: Concurrency,
@@ -104,16 +134,10 @@ pub(crate) async fn pip_sync(
     output_format: PipInstallFormat,
     printer: Printer,
     preview: Preview,
-) -> Result<ExitStatus> {
-    let client_builder = client_builder.clone().keyring(keyring_provider);
+) -> anyhow::Result<ExitStatus> {
+    let start = std::time::Instant::now();
 
-    // Initialize a few defaults.
-    let overrides = &[];
-    let excludes = &[];
-    let upgrade = Upgrade::default();
-    let resolution_mode = ResolutionMode::default();
-    let prerelease = Prerelease::default();
-    let dependency_mode = DependencyMode::Direct;
+    let client_builder = client_builder.clone().keyring(keyring_provider);
 
     // Read all requirements from the provided sources.
     let RequirementsSpecification {
@@ -121,7 +145,7 @@ pub(crate) async fn pip_sync(
         requirements,
         constraints,
         overrides,
-        override_dependencies,
+        mut override_dependencies,
         excludes,
         pylock,
         pylock_groups,
@@ -146,6 +170,8 @@ pub(crate) async fn pip_sync(
     )
     .await?;
 
+    override_dependencies.extend(overrides_from_workspace);
+
     let hash_checking = HashCheckingMode::from_requirements_txt(hash_checking, require_hashes);
 
     if pylock.is_some() {
@@ -157,24 +183,28 @@ pub(crate) async fn pip_sync(
         }
     }
 
+    let constraints: Vec<NameRequirementSpecification> = constraints
+        .iter()
+        .cloned()
+        .chain(
+            constraints_from_workspace
+                .into_iter()
+                .map(NameRequirementSpecification::from),
+        )
+        .collect();
+
+    let excludes: Vec<ExcludeDependency> = excludes
+        .into_iter()
+        .chain(excludes_from_workspace)
+        .collect();
+
     // Read build constraints.
     let build_constraints = Constraints::from_specifications(
-        uv_resolve_operations::read_constraints(build_constraints, &client_builder).await?,
+        uv_resolve_operations::read_constraints(build_constraints, &client_builder)
+            .await?
+            .into_iter()
+            .chain(build_constraints_from_workspace.iter().cloned()),
     );
-
-    // Validate that the requirements are non-empty.
-    if !allow_empty_requirements {
-        let num_requirements =
-            requirements.len() + source_trees.len() + usize::from(pylock.is_some());
-        if num_requirements == 0 {
-            writeln!(
-                printer.stderr(),
-                "No requirements found (hint: use `--allow-empty-requirements` to clear the environment)"
-            )?;
-            write_install_report(&Changelog::default(), dry_run, output_format, printer)?;
-            return Ok(ExitStatus::Success);
-        }
-    }
 
     // Detect the current Python interpreter.
     let environment = if target.is_some() || prefix.is_some() {
@@ -212,6 +242,11 @@ pub(crate) async fn pip_sync(
         environment
     };
 
+    // Lower the extra build dependencies, if any.
+    let extra_build_requires =
+        LoweredExtraBuildDependencies::from_non_lowered(extra_build_dependencies.clone())
+            .into_inner();
+
     // Apply any `--target` or `--prefix` directories.
     let environment = if let Some(target) = target {
         debug!(
@@ -234,18 +269,24 @@ pub(crate) async fn pip_sync(
         if break_system_packages {
             debug!("Ignoring externally managed environment due to `--break-system-packages`");
         } else {
-            return if let Some(error) = externally_managed.into_error() {
-                Err(anyhow::anyhow!(
-                    "The interpreter at `{}` is externally managed, and indicates the following:\n\n{}\n\nConsider creating a virtual environment with `uv venv`.",
+            let managed_message = match externally_managed.into_error() {
+                Some(error) => format!(
+                    "The interpreter at `{}` is externally managed, and indicates the following:\n\n{}\n",
                     environment.root().user_display().cyan(),
                     textwrap::indent(&error, "  ").green(),
-                ))
-            } else {
-                Err(anyhow::anyhow!(
-                    "The interpreter at `{}` is externally managed. Instead, create a virtual environment with `uv venv`.",
+                ),
+                None => format!(
+                    "The interpreter at `{}` is externally managed and cannot be modified.",
                     environment.root().user_display().cyan()
-                ))
+                ),
             };
+
+            return Err(ExternallyManagedError {
+                message: managed_message,
+                root: environment.root().to_path_buf(),
+                system,
+            }
+            .into());
         }
     }
 
@@ -257,16 +298,8 @@ pub(crate) async fn pip_sync(
         })
         .ok();
 
+    // Determine the markers and tags to use for the resolution.
     let interpreter = environment.interpreter();
-
-    // Determine the Python requirement, if the user requested a specific version.
-    let python_requirement = if let Some(python_version) = python_version.as_ref() {
-        PythonRequirement::from_python_version(interpreter, python_version)
-    } else {
-        PythonRequirement::from_interpreter(interpreter)
-    };
-
-    // Determine the markers and tags to use for resolution.
     let marker_env = resolution_markers(
         python_version.as_ref(),
         python_platform.as_ref(),
@@ -278,11 +311,97 @@ pub(crate) async fn pip_sync(
         interpreter,
     )?;
 
+    // With sufficient modifications, installation only needs installed distributions selected by
+    // the resolution. A `pylock.toml` resolution never consults the environment, while reinstalling
+    // every package excludes all installed distributions from candidate selection, including for
+    // transitive dependencies. Delay the environment scan in either case, then restrict it to the
+    // resolved package names.
+    let defer_site_packages = matches!(modifications, Modifications::Sufficient)
+        && (pylock.is_some() || matches!(&reinstall, Reinstall::All));
+
+    let site_packages = if defer_site_packages {
+        None
+    } else {
+        Some(SitePackages::from_environment(&environment)?)
+    };
+
+    // Check if the current environment satisfies the requirements.
+    // Ideally, the resolver would be fast enough to let us remove this check. But right now, for large environments,
+    // it's an order of magnitude faster to validate the environment than to resolve the requirements.
+    if reinstall.is_none()
+        && upgrade.is_none()
+        && source_trees.is_empty()
+        && groups.is_empty()
+        && pylock.is_none()
+        && matches!(modifications, Modifications::Sufficient)
+        && let Some(site_packages) = &site_packages
+    {
+        match site_packages.satisfies_spec(
+            &requirements,
+            &constraints,
+            &overrides,
+            &override_dependencies,
+            &excludes,
+            &dependency_metadata,
+            dependency_mode,
+            InstallationStrategy::Permissive,
+            &marker_env,
+            &tags,
+            config_settings,
+            config_settings_package,
+            &extra_build_requires,
+            extra_build_variables,
+        )? {
+            // If the requirements are already satisfied, we're done.
+            SatisfiesResult::Fresh {
+                recursive_requirements,
+            } => {
+                if enabled!(Level::DEBUG) {
+                    for requirement in recursive_requirements
+                        .iter()
+                        .map(ToString::to_string)
+                        .sorted()
+                    {
+                        debug!("Requirement satisfied: {requirement}");
+                    }
+                }
+                DefaultInstallLogger.on_check(requirements.len(), start, printer, dry_run)?;
+
+                if strict && !dry_run.enabled() {
+                    uv_install_operations::diagnose_environment(
+                        recursive_requirements
+                            .iter()
+                            .map(|requirement| &requirement.name),
+                        &environment,
+                        &marker_env,
+                        &tags,
+                        &dependency_metadata,
+                        printer,
+                    )?;
+                }
+
+                write_install_report(&Changelog::default(), dry_run, output_format, printer)?;
+                return Ok(ExitStatus::Success);
+            }
+            SatisfiesResult::Unsatisfied(requirement) => {
+                debug!("At least one requirement is not satisfied: {requirement}");
+            }
+        }
+    }
+
+    // Determine the Python requirement, if the user requested a specific version.
+    let python_requirement = if let Some(python_version) = python_version.as_ref() {
+        PythonRequirement::from_python_version(interpreter, python_version)
+    } else {
+        PythonRequirement::from_interpreter(interpreter)
+    };
+
     // Collect the set of required hashes.
     let hasher = if let Some(hash_checking) = hash_checking {
         HashStrategy::from_requirements(
             requirements
                 .iter()
+                .chain(overrides.iter())
                 .map(|entry| (&entry.requirement, entry.hashes.as_slice())),
             constraints
                 .iter()
@@ -363,11 +482,6 @@ pub(crate) async fn pip_sync(
     // Initialize any shared state.
     let state = SharedState::default();
 
-    // Lower the extra build dependencies, if any.
-    let extra_build_requires =
-        LoweredExtraBuildDependencies::from_non_lowered(extra_build_dependencies.clone())
-            .into_inner();
-
     // Create a build dispatch.
     let build_dispatch = BuildDispatch::new(
         &client,
@@ -394,9 +508,6 @@ pub(crate) async fn pip_sync(
         concurrency.clone(),
         preview,
     );
-
-    // Determine the set of installed packages.
-    let site_packages = SitePackages::from_environment(&environment)?;
 
     let (resolution, hasher) = if let Some(pylock) = pylock {
         let (install_path, lock) = read_pylock_toml(&pylock, &client_builder).await?;
@@ -447,6 +558,7 @@ pub(crate) async fn pip_sync(
             .build_options(build_options.clone())
             .build();
 
+        // Resolve the requirements.
         let (resolution, hasher) = match uv_resolve_operations::resolve(
             requirements,
             constraints,
@@ -459,7 +571,7 @@ pub(crate) async fn pip_sync(
             extras,
             &groups,
             preferences,
-            Some(site_packages.clone()),
+            site_packages.clone(),
             &hasher,
             &reinstall,
             &upgrade,
@@ -480,13 +592,25 @@ pub(crate) async fn pip_sync(
         )
         .await
         {
-            Ok((resolution, hasher)) => (Resolution::from(resolution), hasher),
+            Ok((graph, hasher)) => (Resolution::from(graph), hasher),
             Err(err) => {
                 return Err(UvError::from(err).into());
             }
         };
 
         (resolution, hasher)
+    };
+
+    // If necessary, convert editable distributions to non-editable.
+    let resolution = apply_editable_mode(resolution, editable);
+
+    let site_packages = match site_packages {
+        // Only resolved packages can be modified when using sufficient installation semantics.
+        None => SitePackages::from_environment_for_packages(
+            &environment,
+            resolution.distributions().map(Name::name),
+        )?,
+        Some(site_packages) => site_packages,
     };
 
     // Constrain any build requirements marked as `match-runtime = true`.
@@ -524,11 +648,11 @@ pub(crate) async fn pip_sync(
         &resolution,
         site_packages,
         InstallationStrategy::Permissive,
-        Modifications::Exact,
+        modifications,
         &reinstall,
         &build_options,
         link_mode,
-        compile.then_some(uv_install_operations::BytecodeCompilation::All),
+        compile.then_some(uv_install_operations::BytecodeCompilation::Installed),
         &hasher,
         &tags,
         &client,
