@@ -11,11 +11,11 @@ use uv_requirements::ScriptRequirementsError;
 use uv_workspace::RequiresPythonSources;
 use uv_workspace::dependency_groups::DependencyGroupError;
 
-use crate::commands::project::ConflictError;
+use crate::ConflictError;
 
 /// A failure while resolving, creating, or updating a Python environment.
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum EnvironmentError {
+pub enum EnvironmentError {
     #[error(transparent)]
     Conflict(#[from] ConflictError),
 

@@ -51,7 +51,7 @@ use uv_warnings::warn_user;
 use uv_workspace::pyproject::ExtraBuildDependencies;
 use uv_workspace::{DiscoveryOptions, Workspace, WorkspaceCache, WorkspaceError};
 
-use crate::commands::project::EnvironmentError;
+use uv_environment_operations::EnvironmentError;
 use uv_python_context::PythonDownloadReporter;
 use uv_python_context::find_requires_python;
 use uv_settings::ResolverSettings;

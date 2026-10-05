@@ -4,6 +4,9 @@ use uv_lock_operations::LockOperation;
 
 use anyhow::Result;
 use tracing::debug;
+use uv_environment_operations::malware::MalwareCheckContext;
+use uv_environment_operations::store_credentials_from_target;
+use uv_environment_operations::sync_from_lock;
 
 use uv_cache::Cache;
 use uv_client::BaseClientBuilder;
@@ -26,15 +29,14 @@ use uv_warnings::warn_user;
 use uv_workspace::{DiscoveryOptions, VirtualProject, WorkspaceCache, WorkspaceErrorKind};
 
 use crate::commands::project;
-use crate::commands::project::environment::CachedEnvironment;
-use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::sync::MalwareCheckContext;
-use crate::commands::project::{
+use uv_configuration::Modifications;
+use uv_dispatch::UniversalState;
+use uv_environment_operations::environment::CachedEnvironment;
+use uv_environment_operations::install_target::{InstallTarget, PackageSelection};
+use uv_environment_operations::{
     LinkErrorReporting, ProjectEnvironment, ProjectEnvironmentPolicy, ProjectEnvironmentTarget,
     ProjectInterpreter, ScriptEnvironment,
 };
-use uv_configuration::Modifications;
-use uv_dispatch::UniversalState;
 use uv_install_operations::loggers::SummaryInstallLogger;
 use uv_lock_operations::LockMode;
 use uv_lock_operations::LockTarget;
@@ -447,7 +449,7 @@ pub(crate) async fn check(
             script,
             lock: result.lock(),
         };
-        match project::sync::do_sync(
+        match sync_from_lock(
             target,
             &venv,
             &extras,
@@ -639,7 +641,7 @@ pub(crate) async fn check(
                     &base_interpreter,
                     &settings.resolver.build_options,
                 )?;
-                project::sync::store_credentials_from_target(target, &client_builder)?;
+                store_credentials_from_target(target, &client_builder)?;
                 let ty_state = state.fork();
                 let environment = match CachedEnvironment::from_locked_resolution(
                     &resolution,
@@ -674,7 +676,7 @@ pub(crate) async fn check(
             debug!("Skipping environment synchronization due to `--no-sync`");
         } else {
             let sync_state = state.fork();
-            match project::sync::do_sync(
+            match sync_from_lock(
                 target,
                 &venv,
                 &extras,

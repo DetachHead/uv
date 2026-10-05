@@ -1,4 +1,3 @@
-use crate::commands::project::python::from_lockfile;
 use std::fmt::Write;
 use std::path::Path;
 
@@ -12,6 +11,7 @@ use uv_command_support::{ExitStatus, Printer, UvError};
 use uv_configuration::TreeFormat;
 use uv_configuration::{ActiveEnvironment, Concurrency, DependencyGroups, TargetTriple};
 use uv_distribution_types::IndexCapabilities;
+use uv_environment_operations::from_lockfile;
 use uv_lock::{PackageMap, TreeDisplay, TreeJsonTarget};
 use uv_normalize::DefaultGroups;
 use uv_normalize::PackageName;
@@ -25,11 +25,11 @@ use uv_settings::PythonInstallMirrors;
 use uv_warnings::warn_user;
 use uv_workspace::{DiscoveryOptions, WorkspaceCache};
 
-use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::{
+use uv_dispatch::UniversalState;
+use uv_environment_operations::install_target::{InstallTarget, PackageSelection};
+use uv_environment_operations::{
     ProjectEnvironmentPolicy, ProjectEnvironmentTarget, ProjectInterpreter,
 };
-use uv_dispatch::UniversalState;
 use uv_lock_operations::DiscoveredProject;
 use uv_lock_operations::FrozenWorkspace;
 use uv_lock_operations::LockTarget;

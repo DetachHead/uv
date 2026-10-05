@@ -9,11 +9,11 @@ use uv_python::{ConfigDiscovery, PythonRequest};
 use uv_python_context::{ProjectPythonRequest, ProjectPythonRequirement, PythonRequirementSource};
 use uv_workspace::{RequiresPythonDeclaration, RequiresPythonSources};
 
-use crate::commands::project::EnvironmentError;
-use crate::commands::project::install_target::InstallTarget;
+use crate::EnvironmentError;
+use crate::install_target::InstallTarget;
 
 /// Determine the Python request and requirement from a frozen lockfile.
-pub(crate) async fn from_lockfile(
+pub async fn from_lockfile(
     python_request: Option<PythonRequest>,
     target: InstallTarget<'_>,
     groups: &DependencyGroupsWithDefaults,

@@ -1,5 +1,3 @@
-use uv_errors::{Hinted, Hints};
-
 use crate::commands::pip::install::ExternallyManagedError;
 use crate::commands::project::ProjectError;
 use crate::commands::project::add::AddDependencyError;
@@ -12,6 +10,7 @@ use crate::commands::tool::run::{ToolRunScriptError, ToolRunUsageError};
 use uv_command_support::Printer;
 use uv_resolve_operations::ExtrasWithoutSourceError;
 
+use uv_errors::{Hinted, Hints};
 /// Format an error chain with the default user-facing hints and output settings.
 pub(crate) fn write_error_chain(err: &anyhow::Error, printer: Printer) -> std::fmt::Result {
     uv_errors::write_error_chain_with_options(
@@ -43,7 +42,7 @@ pub(crate) fn hints_for_error(err: &anyhow::Error) -> Hints<'static> {
         collect_hint::<DependencyNotFoundError>(cause, &mut hints);
         collect_hint::<ExtrasWithoutSourceError>(cause, &mut hints);
         collect_hint::<ProjectError>(cause, &mut hints);
-        collect_hint::<crate::commands::project::EnvironmentError>(cause, &mut hints);
+        collect_hint::<uv_environment_operations::EnvironmentError>(cause, &mut hints);
         collect_hint::<uv_python_context::PythonContextError>(cause, &mut hints);
         collect_hint::<NoExecutablesError>(cause, &mut hints);
         collect_hint::<ExternallyManagedError>(cause, &mut hints);

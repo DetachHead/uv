@@ -87,23 +87,29 @@ mod workspace;
 
 #[cfg(test)]
 mod error_tests {
-    use super::project;
-    use crate::commands::project::EnvironmentError;
+    use std::io::{Error, ErrorKind};
+
     use anyhow::bail;
     use insta::{allow_duplicates, assert_snapshot};
-    use std::io::{Error, ErrorKind};
-    use uv_command_support::UvError;
+
     use uv_lock_operations::LockError;
     use uv_settings::{LockedFlag, LockedSource};
+
+    use super::project;
+    use uv_command_support::UvError;
 
     #[test]
     fn contextual_operations_keep_their_classification_and_cause() -> anyhow::Result<()> {
         let conversions: [fn(uv_resolve_operations::Error) -> UvError; 5] = [
             UvError::from,
-            |error| UvError::from(EnvironmentError::from(error)),
+            |error| UvError::from(uv_environment_operations::EnvironmentError::from(error)),
             |error| UvError::from(LockError::from(error)),
             |error| UvError::from(project::ProjectError::from(LockError::from(error))),
-            |error| UvError::from(project::ProjectError::from(EnvironmentError::from(error))),
+            |error| {
+                UvError::from(project::ProjectError::from(
+                    uv_environment_operations::EnvironmentError::from(error),
+                ))
+            },
         ];
         for convert in conversions {
             for (kind, user_failure) in [
@@ -157,10 +163,9 @@ mod error_tests {
 
     #[test]
     fn project_errors_use_shared_operation_classification() -> anyhow::Result<()> {
-        let error = EnvironmentError::Requirements(uv_requirements::Error::Io(Error::new(
-            ErrorKind::NotFound,
-            "requirements failure",
-        )));
+        let error = uv_environment_operations::EnvironmentError::Requirements(
+            uv_requirements::Error::Io(Error::new(ErrorKind::NotFound, "requirements failure")),
+        );
         assert!(matches!(
             UvError::from(project::ProjectError::from(error)),
             UvError::User(_)
@@ -181,15 +186,6 @@ mod error_tests {
             assert!(error.downcast_ref::<LockError>().is_some());
         }
         Ok(())
-    }
-}
-
-/// Capitalize the first letter of a string.
-pub(super) fn capitalize(s: &str) -> String {
-    let mut chars = s.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
     }
 }
 

@@ -16,6 +16,9 @@ use thiserror::Error;
 use tokio::process::Command;
 use tracing::{debug, trace, warn};
 use url::Url;
+use uv_environment_operations::EnvironmentError;
+use uv_environment_operations::malware::MalwareCheckContext;
+use uv_environment_operations::sync_from_lock;
 
 use uv_cache::Cache;
 use uv_client::BaseClientBuilder;
@@ -60,16 +63,14 @@ struct GistResponse {
 struct GistFile {
     raw_url: String,
 }
-use crate::commands::project;
-use crate::commands::project::environment::{CachedEnvironment, EphemeralEnvironment};
-use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::sync::MalwareCheckContext;
-use crate::commands::project::{
+use uv_configuration::Modifications;
+use uv_dispatch::UniversalState;
+use uv_environment_operations::environment::{CachedEnvironment, EphemeralEnvironment};
+use uv_environment_operations::install_target::{InstallTarget, PackageSelection};
+use uv_environment_operations::{
     EnvironmentSpecification, LinkErrorReporting, PreferenceLocation, ProjectEnvironment,
     ProjectEnvironmentTarget, ScriptEnvironment, update_environment,
 };
-use uv_configuration::Modifications;
-use uv_dispatch::UniversalState;
 use uv_install_operations::loggers::{DefaultInstallLogger, SummaryInstallLogger};
 use uv_lock_operations::LockOperation;
 use uv_lock_operations::LockTarget;
@@ -279,7 +280,7 @@ pub(crate) async fn run(
 
             let install_options = InstallOptions::default();
 
-            match project::sync::do_sync(
+            match sync_from_lock(
                 target,
                 &environment,
                 &extras.with_defaults(DefaultExtras::default()),
@@ -308,7 +309,7 @@ pub(crate) async fn run(
             .await
             {
                 Ok(_) => {}
-                Err(project::EnvironmentError::Resolve(err)) => {
+                Err(EnvironmentError::Resolve(err)) => {
                     let err = *err;
                     return Err(UvError::from(err.with_resolution_context("script")).into());
                 }
@@ -456,7 +457,7 @@ pub(crate) async fn run(
                 .await
                 {
                     Ok(update) => Some(update.into_environment().into_interpreter()),
-                    Err(project::EnvironmentError::Resolve(err)) => {
+                    Err(EnvironmentError::Resolve(err)) => {
                         let err = *err;
                         return Err(UvError::from(err.with_resolution_context("script")).into());
                     }
@@ -799,7 +800,7 @@ pub(crate) async fn run(
                 target.validate_extras(&extras)?;
                 target.validate_groups(&groups)?;
 
-                match project::sync::do_sync(
+                match sync_from_lock(
                     target,
                     &venv,
                     &extras,
@@ -985,7 +986,7 @@ pub(crate) async fn run(
 
             let environment = match result {
                 Ok(resolution) => resolution,
-                Err(project::EnvironmentError::Resolve(err)) => {
+                Err(EnvironmentError::Resolve(err)) => {
                     let err = *err;
                     return Err(UvError::from(err.with_resolution_context("`--with`")).into());
                 }
