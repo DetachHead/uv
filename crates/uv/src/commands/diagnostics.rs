@@ -37,13 +37,13 @@ pub(crate) fn hints_for_error(err: &anyhow::Error) -> Hints<'static> {
         collect_hint::<uv_lock_operations::LockError>(cause, &mut hints);
         collect_hint::<uv_resolve_operations::Error>(cause, &mut hints);
         collect_hint::<uv_install_operations::Error>(cause, &mut hints);
+        collect_hint::<uv_python_context::PythonContextError>(cause, &mut hints);
         collect_hint::<ToolRunScriptError>(cause, &mut hints);
         collect_hint::<RecursionLimitError>(cause, &mut hints);
         collect_hint::<DependencyNotFoundError>(cause, &mut hints);
         collect_hint::<ExtrasWithoutSourceError>(cause, &mut hints);
         collect_hint::<ProjectError>(cause, &mut hints);
         collect_hint::<uv_environment_operations::EnvironmentError>(cause, &mut hints);
-        collect_hint::<uv_python_context::PythonContextError>(cause, &mut hints);
         collect_hint::<NoExecutablesError>(cause, &mut hints);
         collect_hint::<ExternallyManagedError>(cause, &mut hints);
         collect_hint::<MissingProjectVersionError>(cause, &mut hints);
@@ -82,8 +82,8 @@ fn collect_hint<T: Hinted + std::error::Error + 'static>(
 mod tests {
     use insta::{allow_duplicates, assert_debug_snapshot};
 
-    use crate::commands::project::ProjectError;
     use uv_lock_operations::LockError;
+    use uv_project_commands::project::ProjectError;
     use uv_settings::{LockedFlag, LockedSource};
     use uv_workspace::pyproject::{PyprojectTomlError, SourceError};
 

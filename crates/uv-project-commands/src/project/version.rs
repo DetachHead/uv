@@ -43,8 +43,8 @@ use uv_workspace::{
     pyproject_mut::{DependencyTarget, PyProjectTomlMut},
 };
 
-use crate::commands::project::ProjectError;
-use crate::commands::project::edit::{ProjectEdit, PythonTarget};
+use crate::project::ProjectError;
+use crate::project::edit::{ProjectEdit, PythonTarget};
 
 /// Version information for a project (`uv version`).
 #[derive(serde::Serialize)]
@@ -76,7 +76,7 @@ impl std::fmt::Display for ProjectVersionInfo {
 
 /// Read or update project version (`uv version`)
 #[expect(clippy::fn_params_excessive_bools)]
-pub(crate) async fn project_version(
+pub async fn project_version(
     value: Option<String>,
     mut bump: Vec<VersionBumpSpec>,
     short: bool,
@@ -394,7 +394,7 @@ pub(crate) async fn project_version(
 /// A [`WorkspaceError`] that may carry a hint to use `uv self version`.
 #[derive(Debug, Error)]
 #[error("{err}")]
-pub(crate) struct MissingProjectVersionError {
+pub struct MissingProjectVersionError {
     err: WorkspaceError,
 }
 

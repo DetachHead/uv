@@ -2,60 +2,57 @@ use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use uv_lock_operations::LockError;
 
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use rustc_hash::FxHashSet;
 use serde::Serialize;
 use tracing::warn;
+
 use uv_cache::Cache;
 use uv_client::BaseClientBuilder;
 use uv_command_support::{ExitStatus, Printer, UvError};
-use uv_configuration::SyncFormat;
 use uv_configuration::{
     ActiveEnvironment, Concurrency, Constraints, DependencyGroups, DryRun, EditableMode,
-    ExtrasSpecification, InstallOptions, TargetTriple,
+    ExtrasSpecification, InstallOptions, Modifications, SyncFormat, TargetTriple,
 };
+use uv_dispatch::{PlatformState, UniversalState};
 use uv_distribution_types::NameRequirementSpecification;
-use uv_environment_operations::EnvironmentError;
+use uv_environment_operations::install_target::{InstallTarget, PackageSelection};
 use uv_environment_operations::malware::MalwareCheckContext;
-use uv_environment_operations::sync_from_lock;
+use uv_environment_operations::{
+    EnvironmentError, EnvironmentUpdate, LinkErrorReporting, ProjectEnvironment,
+    ProjectEnvironmentTarget, ScriptEnvironment, detect_conflicts, sync_from_lock,
+    update_environment,
+};
 use uv_fs::{PortablePathBuf, Simplified};
+use uv_install_operations::Changelog;
+use uv_install_operations::loggers::DefaultInstallLogger;
+use uv_install_operations::report::{PackageChangesReport, SchemaReport};
 use uv_lock::{Installable, Lock, PythonReport};
+use uv_lock_operations::{
+    DiscoveredProject, FrozenWorkspace, LockError, LockMode, LockOperation, LockResult, LockTarget,
+    MissingLockfileSource,
+};
 use uv_normalize::{DefaultExtras, DefaultGroups, PackageName};
 use uv_preview::{Preview, PreviewFeature};
 use uv_python::{
     ConfigDiscovery, PythonArchitecture, PythonDownloads, PythonEnvironment, PythonPreference,
     PythonRequest,
 };
+use uv_requirements::{script_extra_build_requires, script_specification};
+use uv_resolve_operations::loggers::DefaultResolveLogger;
 use uv_scripts::Pep723Script;
-use uv_settings::{MalwareCheckSettings, PythonInstallMirrors};
+use uv_settings::{
+    FrozenSource, LockCheck, LockedSource, MalwareCheckSettings, PythonInstallMirrors,
+    ResolverInstallerSettings,
+};
 use uv_types::SourceTreeEditablePolicy;
 use uv_warnings::warn_user;
 use uv_workspace::{DiscoveryOptions, MemberDiscovery, VirtualProject, Workspace, WorkspaceCache};
 
-use uv_configuration::Modifications;
-use uv_dispatch::{PlatformState, UniversalState};
-use uv_environment_operations::install_target::{InstallTarget, PackageSelection};
-use uv_environment_operations::{
-    EnvironmentUpdate, LinkErrorReporting, ProjectEnvironment, ProjectEnvironmentTarget,
-    ScriptEnvironment, detect_conflicts, update_environment,
-};
-use uv_install_operations::Changelog;
-use uv_install_operations::loggers::DefaultInstallLogger;
-use uv_install_operations::report::{PackageChangesReport, SchemaReport};
-use uv_lock_operations::DiscoveredProject;
-use uv_lock_operations::FrozenWorkspace;
-use uv_lock_operations::LockTarget;
-use uv_lock_operations::MissingLockfileSource;
-use uv_lock_operations::{LockMode, LockOperation, LockResult};
-use uv_requirements::{script_extra_build_requires, script_specification};
-use uv_resolve_operations::loggers::DefaultResolveLogger;
-use uv_settings::{FrozenSource, LockCheck, LockedSource, ResolverInstallerSettings};
-
 /// Sync the project environment.
-pub(crate) async fn sync(
+pub async fn sync(
     project_dir: &Path,
     lock_check: LockCheck,
     frozen: Option<FrozenSource>,
@@ -401,7 +398,6 @@ pub(crate) async fn sync(
                     return Ok(ExitStatus::Success);
                 }
                 Err(EnvironmentError::Install(error)) => {
-                    let error = *error;
                     if let Some(changelog) = error.outdated_environment() {
                         write_sync_report(
                             &target,
@@ -413,7 +409,7 @@ pub(crate) async fn sync(
                             printer,
                         )?;
                     }
-                    return Err(UvError::from(error).into());
+                    return Err(UvError::from(*error).into());
                 }
                 Err(err) => return Err(UvError::from(err).into()),
             }
@@ -479,7 +475,9 @@ pub(crate) async fn sync(
             };
             let outcome = match result {
                 Ok(result) => Outcome::Success(result),
-                Err(LockError::Resolve(err)) => return Err(UvError::from(*err).into()),
+                Err(LockError::Resolve(err)) => {
+                    return Err(UvError::from(*err).into());
+                }
                 Err(err @ LockError::LockFormat(..)) => return Err(UvError::user(err).into()),
                 Err(LockError::LockMismatch(prev, cur, lock_source)) => {
                     if dry_run.enabled() {
@@ -552,7 +550,6 @@ pub(crate) async fn sync(
     {
         Ok(changelog) => changelog,
         Err(EnvironmentError::Install(error)) => {
-            let error = *error;
             if let Some(changelog) = error.outdated_environment() {
                 write_sync_report(
                     &target,
@@ -564,7 +561,7 @@ pub(crate) async fn sync(
                     printer,
                 )?;
             }
-            return Err(UvError::from(error).into());
+            return Err(UvError::from(*error).into());
         }
         Err(err) => return Err(UvError::from(err).into()),
     };
