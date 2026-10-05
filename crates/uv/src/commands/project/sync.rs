@@ -46,14 +46,6 @@ use uv_warnings::{warn_user, warn_user_once};
 use uv_workspace::pyproject::Source;
 use uv_workspace::{DiscoveryOptions, MemberDiscovery, VirtualProject, Workspace, WorkspaceCache};
 
-use crate::commands::pip::operations;
-use crate::commands::pip::operations::install::Changelog;
-use crate::commands::pip::operations::install::editable::apply_editable_mode;
-use crate::commands::pip::operations::install::loggers::{DefaultInstallLogger, InstallLogger};
-use crate::commands::pip::operations::install::report::{PackageChangesReport, SchemaReport};
-use crate::commands::pip::operations::resolve::loggers::DefaultResolveLogger;
-use crate::commands::pip::operations::resolve::resolution_markers;
-use crate::commands::pip::operations::resolve::resolution_tags;
 use crate::commands::project::discovery::DiscoveredProject;
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
 use crate::commands::project::lock::{LockMode, LockOperation, LockResult};
@@ -65,6 +57,13 @@ use crate::commands::project::{
     detect_conflicts, update_environment,
 };
 use uv_configuration::Modifications;
+use uv_install_operations::editable::apply_editable_mode;
+use uv_install_operations::loggers::{DefaultInstallLogger, InstallLogger};
+use uv_install_operations::report::{PackageChangesReport, SchemaReport};
+use uv_install_operations::{BytecodeCompilation, Changelog, InstallationPlan};
+use uv_resolve_operations::loggers::DefaultResolveLogger;
+use uv_resolve_operations::resolution_markers;
+use uv_resolve_operations::resolution_tags;
 use uv_settings::{
     FrozenSource, InstallerSettingsRef, LockCheck, LockedSource, ResolverInstallerSettings,
 };
@@ -944,10 +943,9 @@ pub(crate) async fn do_sync(
     // Populate credentials from the target.
     store_credentials_from_target(target, &client_builder)?;
 
-    let bytecode_compilation =
-        compile_bytecode.then_some(operations::install::BytecodeCompilation::All);
+    let bytecode_compilation = compile_bytecode.then_some(BytecodeCompilation::All);
     let site_packages = SitePackages::from_environment(venv)?;
-    let installation_plan = operations::install::InstallationPlan::build(
+    let installation_plan = InstallationPlan::build(
         &resolution,
         site_packages,
         InstallationStrategy::Strict,

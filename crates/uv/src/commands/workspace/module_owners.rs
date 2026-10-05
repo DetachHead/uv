@@ -20,12 +20,12 @@ use uv_python::PythonEnvironment;
 use uv_settings::MalwareCheckSettings;
 use uv_workspace::WorkspaceCache;
 
-use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
-use crate::commands::pip::operations::resolve::{resolution_markers, resolution_tags};
 use crate::commands::project::install_target::InstallTarget;
 use crate::commands::project::sync::MalwareCheckContext;
 use crate::commands::project::sync::do_sync;
 use uv_configuration::Modifications;
+use uv_install_operations::loggers::DefaultInstallLogger;
+use uv_resolve_operations::{resolution_markers, resolution_tags};
 use uv_settings::{InstallerSettingsRef, ResolverSettings};
 
 /// Map importable modules to package IDs, optionally syncing all locked extras and groups first.

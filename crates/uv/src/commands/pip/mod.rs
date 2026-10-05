@@ -9,5 +9,3 @@ pub(crate) mod tree;
 pub(crate) mod uninstall;
 
 pub(crate) mod reporters;
-
-pub(crate) mod operations;

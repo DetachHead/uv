@@ -2,8 +2,6 @@ use std::path::Path;
 
 use tracing::debug;
 
-use crate::commands::pip::operations::install::loggers::InstallLogger;
-use crate::commands::pip::operations::resolve::loggers::ResolveLogger;
 use crate::commands::project::{
     EnvironmentError, EnvironmentResolution, EnvironmentSpecification, resolve_environment,
     sync_environment,
@@ -11,6 +9,8 @@ use crate::commands::project::{
 use uv_command_support::Printer;
 use uv_configuration::Modifications;
 use uv_dispatch::PlatformState;
+use uv_install_operations::loggers::InstallLogger;
+use uv_resolve_operations::loggers::ResolveLogger;
 use uv_settings::ResolverInstallerSettings;
 
 use uv_cache::{Cache, CacheBucket};

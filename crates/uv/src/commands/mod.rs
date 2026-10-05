@@ -54,7 +54,6 @@ pub(crate) use tool::uninstall::uninstall as tool_uninstall;
 pub(crate) use tool::update_shell::update_shell as tool_update_shell;
 pub(crate) use tool::upgrade::upgrade as tool_upgrade;
 pub use uv_command_support::ExitStatus;
-
 pub(crate) use uv_console::human_readable_bytes;
 use uv_scripts::Pep723Script;
 pub(crate) use venv::venv;
@@ -89,7 +88,6 @@ mod workspace;
 #[cfg(test)]
 mod error_tests {
     use super::project;
-    use crate::commands::pip::operations::resolve::Error as ResolveError;
     use crate::commands::project::{EnvironmentError, LockError};
     use anyhow::bail;
     use insta::{allow_duplicates, assert_snapshot};
@@ -99,7 +97,7 @@ mod error_tests {
 
     #[test]
     fn contextual_operations_keep_their_classification_and_cause() -> anyhow::Result<()> {
-        let conversions: [fn(ResolveError) -> UvError; 5] = [
+        let conversions: [fn(uv_resolve_operations::Error) -> UvError; 5] = [
             UvError::from,
             |error| UvError::from(EnvironmentError::from(error)),
             |error| UvError::from(LockError::from(error)),
@@ -111,10 +109,9 @@ mod error_tests {
                 (ErrorKind::NotFound, true),
                 (ErrorKind::PermissionDenied, false),
             ] {
-                let error = ResolveError::Requirements(uv_requirements::Error::Io(Error::new(
-                    kind,
-                    "requirements failure",
-                )));
+                let error = uv_resolve_operations::Error::Requirements(uv_requirements::Error::Io(
+                    Error::new(kind, "requirements failure"),
+                ));
                 let error = convert(
                     error
                         .with_resolution_context("script")
@@ -140,7 +137,7 @@ mod error_tests {
 
     #[test]
     fn resolution_context_leaves_other_errors_unchanged() -> anyhow::Result<()> {
-        let error = ResolveError::Io(Error::new(
+        let error = uv_resolve_operations::Error::Io(Error::new(
             ErrorKind::PermissionDenied,
             "cache write failed",
         ));
@@ -149,7 +146,11 @@ mod error_tests {
             bail!("operation classification changed with context");
         };
         assert_snapshot!(format!("{error:#}"), @"cache write failed");
-        assert!(error.downcast_ref::<ResolveError>().is_some());
+        assert!(
+            error
+                .downcast_ref::<uv_resolve_operations::Error>()
+                .is_some()
+        );
         Ok(())
     }
 

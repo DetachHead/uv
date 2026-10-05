@@ -48,17 +48,16 @@ use uv_workspace::WorkspaceCache;
 use uv_workspace::pyproject::ExtraBuildDependencies;
 
 use crate::commands::install_report::write_install_report;
-use crate::commands::pip::operations;
-use crate::commands::pip::operations::install::Changelog;
-use crate::commands::pip::operations::install::editable::apply_editable_mode;
-use crate::commands::pip::operations::install::loggers::{DefaultInstallLogger, InstallLogger};
-use crate::commands::pip::operations::resolve::loggers::DefaultResolveLogger;
-use crate::commands::pip::operations::resolve::{resolution_markers, resolution_tags};
 use crate::commands::pip::reporters::report_target_environment;
 use crate::commands::pylock::{read_pylock_toml, resolve_pylock_toml};
 use uv_configuration::Modifications;
+use uv_install_operations::Changelog;
+use uv_install_operations::editable::apply_editable_mode;
+use uv_install_operations::loggers::{DefaultInstallLogger, InstallLogger};
 use uv_python_context::PythonDownloadReporter;
 use uv_python_context::report_interpreter;
+use uv_resolve_operations::loggers::DefaultResolveLogger;
+use uv_resolve_operations::{resolution_markers, resolution_tags};
 
 /// The interpreter is externally managed and cannot be modified.
 #[derive(Debug, Error)]
@@ -164,7 +163,7 @@ pub(crate) async fn pip_install(
         no_binary,
         no_build,
         extras: _,
-    } = operations::resolve::read_requirements(
+    } = uv_resolve_operations::read_requirements(
         requirements,
         constraints,
         overrides,
@@ -205,7 +204,7 @@ pub(crate) async fn pip_install(
 
     // Read build constraints.
     let build_constraints = Constraints::from_specifications(
-        operations::resolve::read_constraints(build_constraints, &client_builder)
+        uv_resolve_operations::read_constraints(build_constraints, &client_builder)
             .await?
             .into_iter()
             .chain(build_constraints_from_workspace.iter().cloned()),
@@ -373,7 +372,7 @@ pub(crate) async fn pip_install(
                 DefaultInstallLogger.on_check(requirements.len(), start, printer, dry_run)?;
 
                 if strict && !dry_run.enabled() {
-                    operations::install::diagnose_environment(
+                    uv_install_operations::diagnose_environment(
                         recursive_requirements
                             .iter()
                             .map(|requirement| &requirement.name),
@@ -564,7 +563,7 @@ pub(crate) async fn pip_install(
             .build();
 
         // Resolve the requirements.
-        let (resolution, hasher) = match operations::resolve::resolve(
+        let (resolution, hasher) = match uv_resolve_operations::resolve(
             requirements,
             constraints,
             overrides,
@@ -649,7 +648,7 @@ pub(crate) async fn pip_install(
     );
 
     // Sync the environment.
-    let changelog = match operations::install::install(
+    let changelog = match uv_install_operations::install(
         &resolution,
         site_packages,
         InstallationStrategy::Permissive,
@@ -657,7 +656,7 @@ pub(crate) async fn pip_install(
         &reinstall,
         &build_options,
         link_mode,
-        compile.then_some(operations::install::BytecodeCompilation::Installed),
+        compile.then_some(uv_install_operations::BytecodeCompilation::Installed),
         &hasher,
         &tags,
         &client,
@@ -675,7 +674,7 @@ pub(crate) async fn pip_install(
     .await
     {
         Ok(changelog) => changelog,
-        Err(operations::install::Error::OutdatedEnvironment(changelog)) => {
+        Err(uv_install_operations::Error::OutdatedEnvironment(changelog)) => {
             write_install_report(&changelog, dry_run, output_format, printer)?;
             return Ok(ExitStatus::Failure);
         }
@@ -685,11 +684,11 @@ pub(crate) async fn pip_install(
     };
 
     // Notify the user of any resolution diagnostics.
-    operations::resolve::diagnose_resolution(resolution.diagnostics(), printer)?;
+    uv_resolve_operations::diagnose_resolution(resolution.diagnostics(), printer)?;
 
     // Notify the user of any environment diagnostics.
     if strict && !dry_run.enabled() {
-        operations::install::diagnose_environment(
+        uv_install_operations::diagnose_environment(
             resolution.distributions().map(Name::name),
             &environment,
             &marker_env,
