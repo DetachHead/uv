@@ -7,7 +7,7 @@ use goblin::mach::load_command::{CommandVariant, LoadCommand, Section64};
 use scroll::{LE, Pread};
 
 use crate::Error;
-use crate::bytes::{c_string, range, usize_size};
+use crate::bytes::{align, c_string, put_le32, range, u32_size, usize_size};
 
 const HEADER_SIZE: usize = 32;
 
@@ -16,7 +16,15 @@ struct Command<'a> {
     parsed: CommandVariant,
 }
 
-pub(crate) fn validate(image: &[u8]) -> Result<(), Error> {
+pub(crate) struct Layout<'a> {
+    commands: Vec<Command<'a>>,
+    install_id: usize,
+    command_end: usize,
+    data_start: usize,
+    code_limit: usize,
+}
+
+pub(crate) fn parse(image: &[u8]) -> Result<Layout<'_>, Error> {
     let header: Header64 = image.pread_with(0, LE)?;
     if header.magic != MH_MAGIC_64 || header.filetype != MH_DYLIB {
         return Err(Error::Unsupported(
@@ -65,6 +73,7 @@ pub(crate) fn validate(image: &[u8]) -> Result<(), Error> {
     let mut virtual_segments = Vec::new();
     let mut sections = Vec::new();
     let mut references = Vec::new();
+    let mut data_start = image.len();
 
     for (index, command) in commands.iter().enumerate() {
         if let CommandVariant::IdDylib(dylib) = &command.parsed {
@@ -123,6 +132,9 @@ pub(crate) fn validate(image: &[u8]) -> Result<(), Error> {
             }
 
             if !segment_range.is_empty() {
+                if segment_range.start > 0 {
+                    data_start = data_start.min(segment_range.start);
+                }
                 segments.push(segment_range.clone());
             }
 
@@ -189,6 +201,7 @@ pub(crate) fn validate(image: &[u8]) -> Result<(), Error> {
                             "section is outside its segment or overlaps load commands",
                         ));
                     }
+                    data_start = data_start.min(section_range.start);
                     sections.push(section_range.clone());
                 }
 
@@ -208,7 +221,7 @@ pub(crate) fn validate(image: &[u8]) -> Result<(), Error> {
     check_overlaps(&mut segments)?;
     check_overlaps(&mut sections)?;
 
-    install_id.ok_or(Error::Malformed("missing LC_ID_DYLIB"))?;
+    let install_id = install_id.ok_or(Error::Malformed("missing LC_ID_DYLIB"))?;
     text.ok_or(Error::Malformed("missing __TEXT segment"))?;
     let (_, linkedit) = linkedit.ok_or(Error::Malformed("missing __LINKEDIT segment"))?;
 
@@ -253,13 +266,69 @@ pub(crate) fn validate(image: &[u8]) -> Result<(), Error> {
                 "file data overlaps load commands or the signature",
             ));
         }
+        data_start = data_start.min(reference.start);
     }
 
     if sections.iter().any(|section| section.end > code_limit) {
         return Err(Error::Malformed("section overlaps the code signature"));
     }
 
-    Ok(())
+    Ok(Layout {
+        commands,
+        install_id,
+        command_end,
+        data_start,
+        code_limit,
+    })
+}
+
+pub(crate) fn replace_install_name(image: &[u8], name: &[u8]) -> Result<Vec<u8>, Error> {
+    let layout = parse(image)?;
+    let mut output = image[..HEADER_SIZE].to_vec();
+
+    for (index, command) in layout.commands.iter().enumerate() {
+        if index == layout.install_id {
+            let size = align(name.len().checked_add(25).ok_or(Error::TooLarge)?, 8)?;
+            let size_u32 = u32_size(size)?;
+
+            let mut replacement = vec![0; size];
+            replacement[..24].copy_from_slice(&command.data[..24]);
+            put_le32(&mut replacement, 4, size_u32);
+            put_le32(&mut replacement, 8, 24);
+            replacement[24..24 + name.len()].copy_from_slice(name);
+
+            output.extend(replacement);
+        } else {
+            output.extend_from_slice(command.data);
+        }
+    }
+
+    replace_commands(image, output, &layout)
+}
+
+fn replace_commands(
+    image: &[u8],
+    mut output: Vec<u8>,
+    layout: &Layout<'_>,
+) -> Result<Vec<u8>, Error> {
+    if output.len() > layout.data_start || output.len() > layout.code_limit {
+        return Err(Error::InsufficientHeaderPadding);
+    }
+
+    if output.len() > layout.command_end
+        && image[layout.command_end..output.len()]
+            .iter()
+            .any(|byte| *byte != 0)
+    {
+        return Err(Error::InsufficientHeaderPadding);
+    }
+
+    let sizeofcmds = u32_size(output.len() - HEADER_SIZE)?;
+    put_le32(&mut output, 20, sizeofcmds);
+    output.resize(output.len().max(layout.command_end), 0);
+    output.extend_from_slice(&image[output.len()..]);
+
+    Ok(output)
 }
 
 fn check_overlaps(regions: &mut [Range<usize>]) -> Result<(), Error> {

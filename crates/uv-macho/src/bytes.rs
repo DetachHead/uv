@@ -27,3 +27,15 @@ pub(crate) fn c_string(bytes: &[u8], offset: usize) -> Result<&[u8], Error> {
 
     Ok(&bytes[..end])
 }
+
+pub(crate) fn align(value: usize, alignment: usize) -> Result<usize, Error> {
+    Ok(value.checked_add(alignment - 1).ok_or(Error::TooLarge)? & !(alignment - 1))
+}
+
+pub(crate) fn u32_size(value: usize) -> Result<u32, Error> {
+    value.try_into().map_err(|_| Error::TooLarge)
+}
+
+pub(crate) fn put_le32(bytes: &mut [u8], offset: usize, value: u32) {
+    bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+}

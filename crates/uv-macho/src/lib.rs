@@ -1,4 +1,4 @@
-//! Validation of thin 64-bit macOS Mach-O dylibs.
+//! Validation and install-name editing for thin 64-bit macOS Mach-O dylibs.
 
 mod bytes;
 mod macho;
@@ -14,6 +14,10 @@ pub enum Error {
     Malformed(&'static str),
     #[error("Unsupported Mach-O: {0}")]
     Unsupported(&'static str),
+    #[error("Not enough Mach-O header padding for the install name and code signature")]
+    InsufficientHeaderPadding,
+    #[error("The install name must be nonempty and contain no NUL bytes")]
+    InvalidName,
     #[error("Mach-O image exceeds the supported size")]
     TooLarge,
 }
@@ -23,5 +27,18 @@ pub enum Error {
 /// Checks load commands, segment and section boundaries, and the location of any
 /// embedded signature. This does not verify code-signing hashes or certificates.
 pub fn validate(image: &[u8]) -> Result<(), Error> {
-    macho::validate(image)
+    macho::parse(image).map(|_| ())
+}
+
+/// Replace a dylib's install name using existing header padding.
+///
+/// The input is never modified, and section data is never relocated. Names are
+/// bytes so Unix paths need not be UTF-8. This invalidates any existing signature;
+/// the returned image must be re-signed before loading it on macOS.
+pub fn replace_install_name(image: &[u8], name: &[u8]) -> Result<Vec<u8>, Error> {
+    if name.is_empty() || name.contains(&0) {
+        return Err(Error::InvalidName);
+    }
+
+    macho::replace_install_name(image, name)
 }
