@@ -8,6 +8,10 @@
 //! Python layout and times the production patch operation, including file I/O and
 //! child-process startup. Downloading, extraction, file preparation, verification, and
 //! cleanup are excluded. Compare runs on the same machine and filesystem.
+//!
+//! Both the default `install_name_tool` path and the `native-macho-edit` preview are
+//! measured. Native timings include ad-hoc signing and atomic file replacement;
+//! strict signature verification runs outside the timer.
 
 // Don't optimize the alloc crate away due to it being otherwise unused.
 // https://github.com/rust-lang/rust/issues/64402
@@ -26,7 +30,7 @@ mod macos {
     use tempfile::TempDir;
 
     use uv_client::BaseClientBuilder;
-    use uv_preview::Preview;
+    use uv_preview::{MaybePreviewFeature, Preview, PreviewFeature};
     use uv_python::downloads::{DownloadResult, ManagedPythonDownload, ManagedPythonDownloadList};
     use uv_python::managed::ManagedPythonInstallation;
 
@@ -111,28 +115,50 @@ mod macos {
             .expect("Missing Python download metadata");
         let bytes = load_dylib(download);
 
-        // Check the operation before timing it so a skipped edit cannot appear fast.
-        let (directory, installation) = prepare_dylib(&bytes, download);
-        installation
-            .ensure_dylib_patched()
-            .expect("Failed to patch dylib");
-        verify_install_name(&installation);
-        drop((directory, installation));
+        for (name, preview) in [
+            ("install_name_tool", Preview::default()),
+            (
+                "native_macho_edit",
+                Preview::from_feature_names(&[MaybePreviewFeature::Known(
+                    PreviewFeature::NativeMachoEdit,
+                )]),
+            ),
+        ] {
+            uv_preview::set(preview).expect("Failed to configure preview features");
 
-        criterion.bench_function(
-            &format!("patch_dylib/install_name_tool/{}", download.key()),
-            |benchmark| {
-                benchmark.iter_batched_ref(
-                    || prepare_dylib(&bytes, download),
-                    |(_, installation)| {
-                        black_box(installation)
-                            .ensure_dylib_patched()
-                            .expect("Failed to patch dylib");
-                    },
-                    BatchSize::PerIteration,
-                );
-            },
-        );
+            // Check the operation before timing it so a skipped edit cannot appear fast.
+            let (directory, installation) = prepare_dylib(&bytes, download);
+            installation
+                .ensure_dylib_patched()
+                .expect("Failed to patch dylib");
+            verify_install_name(&installation);
+
+            if preview.is_enabled(PreviewFeature::NativeMachoEdit) {
+                let output = Command::new("/usr/bin/codesign")
+                    .args(["--verify", "--strict"])
+                    .arg(installation.path().join(DYLIB))
+                    .output()
+                    .expect("Failed to verify dylib signature");
+                assert!(output.status.success(), "codesign failed: {output:?}");
+            }
+
+            drop((directory, installation));
+
+            criterion.bench_function(
+                &format!("patch_dylib/{name}/{}", download.key()),
+                |benchmark| {
+                    benchmark.iter_batched_ref(
+                        || prepare_dylib(&bytes, download),
+                        |(_, installation)| {
+                            black_box(installation)
+                                .ensure_dylib_patched()
+                                .expect("Failed to patch dylib");
+                        },
+                        BatchSize::PerIteration,
+                    );
+                },
+            );
+        }
     }
 }
 

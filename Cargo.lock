@@ -7185,6 +7185,7 @@ dependencies = [
  "uv-extract",
  "uv-fs",
  "uv-install-wheel",
+ "uv-macho",
  "uv-macros",
  "uv-pep440",
  "uv-pep508",
