@@ -19,6 +19,9 @@ use url::Url;
 
 use uv_cache::Cache;
 use uv_client::BaseClientBuilder;
+use uv_command_support::child::read_env_files;
+use uv_command_support::child::run_to_completion;
+use uv_command_support::{ExitStatus, Printer, UvError};
 use uv_configuration::{
     ActiveEnvironment, Concurrency, Constraints, DependencyGroups, DryRun, EditableMode, EnvFile,
     ExtrasSpecification, InstallOptions, RequirementsInput, TargetTriple,
@@ -51,8 +54,6 @@ use uv_types::SourceTreeEditablePolicy;
 use uv_warnings::warn_user;
 use uv_workspace::{DiscoveryOptions, VirtualProject, WorkspaceCache, WorkspaceErrorKind};
 
-use crate::child::run_to_completion;
-
 /// GitHub Gist API response structure
 #[derive(serde::Deserialize)]
 struct GistResponse {
@@ -69,6 +70,7 @@ use crate::commands::pip::operations::install::loggers::{
 use crate::commands::pip::operations::resolve::loggers::{
     DefaultResolveLogger, SummaryResolveLogger,
 };
+use crate::commands::project;
 use crate::commands::project::environment::{CachedEnvironment, EphemeralEnvironment};
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
 use crate::commands::project::lock::LockMode;
@@ -80,8 +82,6 @@ use crate::commands::project::{
     update_environment,
 };
 use crate::commands::reporters::PythonDownloadReporter;
-use crate::commands::{ExitStatus, UvError, project, read_env_files};
-use crate::printer::Printer;
 use uv_configuration::Modifications;
 use uv_settings::{
     FrozenSource, LockCheck, LockedSource, ResolverInstallerSettings, ResolverSettings,

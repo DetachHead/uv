@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::fmt::Write;
+use uv_command_support::{ExitStatus, Printer};
 use uv_configuration::PythonListFormat;
 use uv_pep440::Version;
 
@@ -19,8 +20,6 @@ use uv_python::{
     PythonSource, find_all_python_installations,
 };
 
-use crate::commands::ExitStatus;
-use crate::printer::Printer;
 use uv_settings::PythonListKinds;
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]

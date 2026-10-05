@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::Result;
 use uv_cache::Cache;
 use uv_client::BaseClientBuilder;
+use uv_command_support::Printer;
 use uv_configuration::{
     Concurrency, DependencyGroups, DependencyGroupsWithDefaults, DryRun, ExtrasSpecification,
     ExtrasSpecificationWithDefaults, InstallOptions, Reinstall,
@@ -24,7 +25,6 @@ use crate::commands::pip::operations::resolve::{resolution_markers, resolution_t
 use crate::commands::project::install_target::InstallTarget;
 use crate::commands::project::sync::MalwareCheckContext;
 use crate::commands::project::sync::do_sync;
-use crate::printer::Printer;
 use uv_configuration::Modifications;
 use uv_settings::{InstallerSettingsRef, ResolverSettings};
 

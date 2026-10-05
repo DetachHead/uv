@@ -7,6 +7,7 @@ use tracing::warn;
 
 use uv_cache::Cache;
 use uv_client::BaseClientBuilder;
+use uv_command_support::{ExitStatus, Printer, UvError};
 use uv_configuration::{
     ActiveEnvironment, Concurrency, DependencyGroups, DryRun, ExtrasSpecification, InstallOptions,
 };
@@ -27,6 +28,7 @@ use uv_workspace::{DiscoveryOptions, VirtualProject, WorkspaceCache};
 
 use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
 use crate::commands::pip::operations::resolve::loggers::DefaultResolveLogger;
+use crate::commands::project;
 use crate::commands::project::edit::{EditTarget, ProjectEdit, PythonTarget};
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
 use crate::commands::project::lock::LockMode;
@@ -36,8 +38,6 @@ use crate::commands::project::{
     LinkErrorReporting, ProjectEnvironment, ProjectEnvironmentPolicy, ProjectEnvironmentTarget,
     ProjectInterpreter, ProjectPythonRequest, ScriptInterpreter,
 };
-use crate::commands::{ExitStatus, UvError, project};
-use crate::printer::Printer;
 use uv_configuration::Modifications;
 use uv_settings::{FrozenSource, LockCheck, ResolverInstallerSettings};
 

@@ -11,6 +11,7 @@ use tracing::debug;
 
 use uv_cache::{Cache, Refresh};
 use uv_client::{BaseClientBuilder, RegistryClientBuilder};
+use uv_command_support::{ExitStatus, Printer, UvError};
 use uv_configuration::{
     ActiveEnvironment, Concurrency, Constraints, DependencyGroupsWithDefaults, DryRun,
     ExcludeDependency, ExtrasSpecification, Override, PackageOverride, Reinstall, Upgrade,
@@ -59,8 +60,7 @@ use crate::commands::project::{
     init_script_python_requirement,
 };
 use crate::commands::reporters::PythonDownloadReporter;
-use crate::commands::{ExitStatus, ScriptPath, UvError, pip};
-use crate::printer::Printer;
+use crate::commands::{ScriptPath, pip};
 use uv_settings::{FrozenSource, LockCheck, LockedSource, ResolverSettings};
 
 /// The result of running a lock operation.
