@@ -12,8 +12,8 @@ use tracing::{trace, warn};
 use uv_audit::Dependency;
 use uv_audit::osv::{self, Filter};
 use uv_cache::Cache;
-use uv_cli::SyncFormat;
 use uv_client::{BaseClientBuilder, CachedClient, RegistryClientBuilder};
+use uv_configuration::SyncFormat;
 use uv_configuration::{
     ActiveEnvironment, Concurrency, Constraints, DependencyGroups, DependencyGroupsWithDefaults,
     DryRun, EditableMode, ExtrasSpecification, ExtrasSpecificationWithDefaults, HashCheckingMode,
@@ -46,7 +46,6 @@ use uv_workspace::pyproject::Source;
 use uv_workspace::{DiscoveryOptions, MemberDiscovery, VirtualProject, Workspace, WorkspaceCache};
 
 use crate::commands::pip::operations;
-use crate::commands::pip::operations::Modifications;
 use crate::commands::pip::operations::install::Changelog;
 use crate::commands::pip::operations::install::editable::apply_editable_mode;
 use crate::commands::pip::operations::install::loggers::{DefaultInstallLogger, InstallLogger};
@@ -66,7 +65,8 @@ use crate::commands::project::{
 };
 use crate::commands::{ExitStatus, UvError};
 use crate::printer::Printer;
-use crate::settings::{
+use uv_configuration::Modifications;
+use uv_settings::{
     FrozenSource, InstallerSettingsRef, LockCheck, LockedSource, ResolverInstallerSettings,
 };
 

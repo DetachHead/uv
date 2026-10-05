@@ -8,11 +8,11 @@ use thiserror::Error;
 
 use tracing::debug;
 use uv_cache::Cache;
-use uv_cli::{VersionBump, VersionBumpSpec, VersionFormat};
 use uv_client::BaseClientBuilder;
 use uv_configuration::{
     ActiveEnvironment, Concurrency, DependencyGroups, DryRun, ExtrasSpecification, InstallOptions,
 };
+use uv_configuration::{VersionBump, VersionBumpSpec, VersionFormat};
 use uv_dispatch::UniversalState;
 use uv_fs::Simplified;
 use uv_normalize::DefaultExtras;
@@ -31,7 +31,6 @@ use uv_workspace::{
     pyproject_mut::{DependencyTarget, PyProjectTomlMut},
 };
 
-use crate::commands::pip::operations::Modifications;
 use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
 use crate::commands::pip::operations::resolve::loggers::DefaultResolveLogger;
 use crate::commands::project::edit::{ProjectEdit, PythonTarget};
@@ -45,7 +44,8 @@ use crate::commands::project::{
 };
 use crate::commands::{ExitStatus, UvError, project};
 use crate::printer::Printer;
-use crate::settings::{FrozenSource, LockCheck, ResolverInstallerSettings};
+use uv_configuration::Modifications;
+use uv_settings::{FrozenSource, LockCheck, ResolverInstallerSettings};
 
 /// Version information for a project (`uv version`).
 #[derive(serde::Serialize)]

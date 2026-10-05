@@ -36,13 +36,13 @@ use uv_warnings::{warn_user, warn_user_once, warn_user_with_chain};
 use uv_workspace::WorkspaceCache;
 
 use crate::commands::ExitStatus;
+use crate::commands::pip::operations;
 use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
 use crate::commands::pip::operations::resolve::latest::LatestClient;
 use crate::commands::pip::operations::resolve::loggers::{
     DefaultResolveLogger, SummaryResolveLogger,
 };
 use crate::commands::pip::operations::resolve::{resolution_markers, resolution_tags};
-use crate::commands::pip::operations::{self, Modifications};
 use crate::commands::project::{
     EnvironmentError, EnvironmentResolution, EnvironmentSpecification, LockValidationError,
     resolve_environment, resolve_names, sync_environment, update_environment,
@@ -55,7 +55,8 @@ use crate::commands::tool::error::ToolLockError;
 use crate::commands::tool::{Target, ToolRequest};
 use crate::commands::{UvError, reporters::PythonDownloadReporter};
 use crate::printer::Printer;
-use crate::settings::{ResolverInstallerSettings, ResolverSettings};
+use uv_configuration::Modifications;
+use uv_settings::{ResolverInstallerSettings, ResolverSettings};
 
 /// Install a tool.
 pub(crate) async fn install(

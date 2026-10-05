@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::fmt::Write;
-use uv_cli::PythonListFormat;
+use uv_configuration::PythonListFormat;
 use uv_pep440::Version;
 
 use anyhow::Result;
@@ -21,7 +21,7 @@ use uv_python::{
 
 use crate::commands::ExitStatus;
 use crate::printer::Printer;
-use crate::settings::PythonListKinds;
+use uv_settings::PythonListKinds;
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 enum Kind {

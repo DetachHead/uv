@@ -251,7 +251,7 @@ mod tests {
 
     use crate::commands::project::LockError;
     use crate::commands::project::ProjectError;
-    use crate::settings::{LockedFlag, LockedSource};
+    use uv_settings::{LockedFlag, LockedSource};
     use uv_workspace::pyproject::{PyprojectTomlError, SourceError};
 
     use super::hints_for_error;

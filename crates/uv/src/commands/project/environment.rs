@@ -2,7 +2,6 @@ use std::path::Path;
 
 use tracing::debug;
 
-use crate::commands::pip::operations::Modifications;
 use crate::commands::pip::operations::install::loggers::InstallLogger;
 use crate::commands::pip::operations::resolve::loggers::ResolveLogger;
 use crate::commands::project::{
@@ -10,14 +9,15 @@ use crate::commands::project::{
     sync_environment,
 };
 use crate::printer::Printer;
-use crate::settings::ResolverInstallerSettings;
+use uv_configuration::Modifications;
+use uv_dispatch::PlatformState;
+use uv_settings::ResolverInstallerSettings;
 
 use uv_cache::{Cache, CacheBucket};
 use uv_cache_info::CacheInfo;
 use uv_cache_key::{cache_digest, hash_digest};
 use uv_client::BaseClientBuilder;
 use uv_configuration::{Concurrency, Constraints, HashCheckingMode, TargetTriple};
-use uv_dispatch::PlatformState;
 use uv_distribution_types::{
     BuiltDist, Dist, Identifier, Node, Resolution, ResolvedDist, SourceDist,
 };

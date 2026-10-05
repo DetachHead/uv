@@ -25,7 +25,6 @@ use uv_workspace::pyproject::DependencyType;
 use uv_workspace::pyproject_mut::{DependencyTarget, PyProjectTomlMut};
 use uv_workspace::{DiscoveryOptions, VirtualProject, WorkspaceCache};
 
-use crate::commands::pip::operations::Modifications;
 use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
 use crate::commands::pip::operations::resolve::loggers::DefaultResolveLogger;
 use crate::commands::project::edit::{EditTarget, ProjectEdit, PythonTarget};
@@ -39,7 +38,8 @@ use crate::commands::project::{
 };
 use crate::commands::{ExitStatus, UvError, project};
 use crate::printer::Printer;
-use crate::settings::{FrozenSource, LockCheck, ResolverInstallerSettings};
+use uv_configuration::Modifications;
+use uv_settings::{FrozenSource, LockCheck, ResolverInstallerSettings};
 
 /// Remove one or more packages from the project requirements.
 pub(crate) async fn remove(
