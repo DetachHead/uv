@@ -39,3 +39,25 @@ pub(crate) fn u32_size(value: usize) -> Result<u32, Error> {
 pub(crate) fn put_le32(bytes: &mut [u8], offset: usize, value: u32) {
     bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
 }
+
+pub(crate) fn be32(bytes: &[u8], offset: usize) -> Result<u32, Error> {
+    let bytes = &bytes[range(offset, 4, bytes.len())?];
+
+    Ok(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+pub(crate) fn be64(bytes: &[u8], offset: usize) -> Result<u64, Error> {
+    Ok((u64::from(be32(bytes, offset)?) << 32) | u64::from(be32(bytes, offset + 4)?))
+}
+
+pub(crate) fn put_be32(bytes: &mut [u8], offset: usize, value: u32) {
+    bytes[offset..offset + 4].copy_from_slice(&value.to_be_bytes());
+}
+
+pub(crate) fn put_be64(bytes: &mut [u8], offset: usize, value: u64) {
+    bytes[offset..offset + 8].copy_from_slice(&value.to_be_bytes());
+}
+
+pub(crate) fn put_le64(bytes: &mut [u8], offset: usize, value: u64) {
+    bytes[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+}

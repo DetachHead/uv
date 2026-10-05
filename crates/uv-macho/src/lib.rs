@@ -1,9 +1,10 @@
-//! Validation and install-name editing for thin 64-bit macOS Mach-O dylibs.
+//! Validation, install-name editing, and ad-hoc signing for thin 64-bit macOS Mach-O dylibs.
 
 mod bytes;
 mod macho;
+mod signature;
 
-/// An error validating a Mach-O image.
+/// An error validating, editing, or signing a Mach-O image.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to parse Mach-O: {0}")]
@@ -18,6 +19,8 @@ pub enum Error {
     InsufficientHeaderPadding,
     #[error("The install name must be nonempty and contain no NUL bytes")]
     InvalidName,
+    #[error("The signing identifier must be nonempty and contain no NUL bytes")]
+    InvalidIdentifier,
     #[error("Mach-O image exceeds the supported size")]
     TooLarge,
 }
@@ -41,4 +44,26 @@ pub fn replace_install_name(image: &[u8], name: &[u8]) -> Result<Vec<u8>, Error>
     }
 
     macho::replace_install_name(image, name)
+}
+
+/// Generate an ad-hoc signature for a dylib, retaining supported signing metadata.
+///
+/// Uses `identifier` when the image has no signing identifier. Existing requirements,
+/// entitlements, and runtime metadata are retained; certificate identity is removed.
+/// Unsupported signing metadata produces an error. The input is never modified.
+pub fn adhoc_sign(image: &[u8], identifier: &[u8]) -> Result<Vec<u8>, Error> {
+    if identifier.is_empty() || identifier.contains(&0) {
+        return Err(Error::InvalidIdentifier);
+    }
+
+    macho::adhoc_sign(image, identifier)
+}
+
+/// Replace a dylib's install name and generate an ad-hoc signature.
+///
+/// Combines [`replace_install_name`] and [`adhoc_sign`]. The input is never modified,
+/// including when editing or signing fails.
+pub fn set_install_name(image: &[u8], name: &[u8], identifier: &[u8]) -> Result<Vec<u8>, Error> {
+    let image = replace_install_name(image, name)?;
+    adhoc_sign(&image, identifier)
 }

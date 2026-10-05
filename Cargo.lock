@@ -6884,9 +6884,13 @@ name = "uv-macho"
 version = "0.0.90"
 dependencies = [
  "anyhow",
+ "fs-err",
  "goblin",
  "insta",
  "scroll",
+ "sha1",
+ "sha2 0.11.0",
+ "tempfile",
  "thiserror",
 ]
 

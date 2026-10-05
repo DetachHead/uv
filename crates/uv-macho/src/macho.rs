@@ -3,11 +3,14 @@ use std::ops::Range;
 use goblin::mach::constants::cputype::{CPU_TYPE_ARM64, CPU_TYPE_X86_64};
 use goblin::mach::constants::{S_GB_ZEROFILL, S_THREAD_LOCAL_ZEROFILL, S_ZEROFILL, SECTION_TYPE};
 use goblin::mach::header::{Header64, MH_DYLIB, MH_MAGIC_64};
-use goblin::mach::load_command::{CommandVariant, LoadCommand, Section64};
+use goblin::mach::load_command::{
+    CommandVariant, LC_CODE_SIGNATURE, LoadCommand, Section64, SegmentCommand64,
+};
 use scroll::{LE, Pread};
 
 use crate::Error;
-use crate::bytes::{align, c_string, put_le32, range, u32_size, usize_size};
+use crate::bytes::{align, c_string, put_le32, put_le64, range, u32_size, usize_size};
+use crate::signature::Metadata;
 
 const HEADER_SIZE: usize = 32;
 
@@ -22,6 +25,14 @@ pub(crate) struct Layout<'a> {
     command_end: usize,
     data_start: usize,
     code_limit: usize,
+    signature: Option<Range<usize>>,
+    signature_command: Option<usize>,
+    text: SegmentCommand64,
+    linkedit: SegmentCommand64,
+    linkedit_index: usize,
+    info_plist: Option<&'a [u8]>,
+    minimum_version: Option<u32>,
+    cputype: u32,
 }
 
 pub(crate) fn parse(image: &[u8]) -> Result<Layout<'_>, Error> {
@@ -222,8 +233,9 @@ pub(crate) fn parse(image: &[u8]) -> Result<Layout<'_>, Error> {
     check_overlaps(&mut sections)?;
 
     let install_id = install_id.ok_or(Error::Malformed("missing LC_ID_DYLIB"))?;
-    text.ok_or(Error::Malformed("missing __TEXT segment"))?;
-    let (_, linkedit) = linkedit.ok_or(Error::Malformed("missing __LINKEDIT segment"))?;
+    let text = text.ok_or(Error::Malformed("missing __TEXT segment"))?;
+    let (linkedit_index, linkedit) =
+        linkedit.ok_or(Error::Malformed("missing __LINKEDIT segment"))?;
 
     virtual_segments.sort_unstable();
     if virtual_segments
@@ -279,6 +291,14 @@ pub(crate) fn parse(image: &[u8]) -> Result<Layout<'_>, Error> {
         command_end,
         data_start,
         code_limit,
+        signature,
+        signature_command,
+        text,
+        linkedit,
+        linkedit_index,
+        info_plist,
+        minimum_version,
+        cputype: header.cputype,
     })
 }
 
@@ -327,6 +347,99 @@ fn replace_commands(
     put_le32(&mut output, 20, sizeofcmds);
     output.resize(output.len().max(layout.command_end), 0);
     output.extend_from_slice(&image[output.len()..]);
+
+    Ok(output)
+}
+
+pub(crate) fn adhoc_sign(image: &[u8], identifier: &[u8]) -> Result<Vec<u8>, Error> {
+    let layout = parse(image)?;
+    let metadata = Metadata::read(
+        layout
+            .signature
+            .as_ref()
+            .map(|region| &image[region.clone()]),
+        identifier,
+        layout.code_limit,
+        layout.info_plist,
+    )?;
+
+    let command_offset = |index: usize| {
+        HEADER_SIZE
+            + layout.commands[..index]
+                .iter()
+                .map(|command| command.data.len())
+                .sum::<usize>()
+    };
+    let linkedit_offset = command_offset(layout.linkedit_index);
+
+    let (mut output, signature_offset) = if let Some(index) = layout.signature_command {
+        (image.to_vec(), command_offset(index))
+    } else {
+        let mut commands = image[..layout.command_end].to_vec();
+        let offset = commands.len();
+        commands.resize(offset + 16, 0);
+        put_le32(&mut commands, offset, LC_CODE_SIGNATURE);
+        put_le32(&mut commands, offset + 4, 16);
+        put_le32(&mut commands, 16, u32_size(layout.commands.len() + 1)?);
+
+        (replace_commands(image, commands, &layout)?, offset)
+    };
+
+    output.truncate(layout.code_limit);
+    let signature_start = align(output.len(), 16)?;
+    output.resize(signature_start, 0);
+
+    let legacy = layout
+        .minimum_version
+        .is_some_and(|version| version < 0x000a_0b04);
+    let text_range = (layout.text.fileoff, layout.text.filesize);
+    let signature_size = align(
+        metadata
+            .build(&output, text_range, layout.info_plist, legacy, false)?
+            .len(),
+        16,
+    )?;
+    let final_size = signature_start
+        .checked_add(signature_size)
+        .ok_or(Error::TooLarge)?;
+    u32_size(final_size)?;
+
+    // Finalize the load commands before hashing the image they describe.
+    put_le32(
+        &mut output,
+        signature_offset + 8,
+        u32_size(signature_start)?,
+    );
+    put_le32(
+        &mut output,
+        signature_offset + 12,
+        u32_size(signature_size)?,
+    );
+
+    let linkedit_size = final_size
+        .checked_sub(usize_size(layout.linkedit.fileoff)?)
+        .ok_or(Error::Malformed("invalid __LINKEDIT offset"))?;
+    put_le64(&mut output, linkedit_offset + 48, linkedit_size as u64);
+
+    // __LINKEDIT must have enough virtual pages even when a replacement signature grows.
+    let segment_alignment = match layout.cputype {
+        CPU_TYPE_ARM64 => 16384,
+        CPU_TYPE_X86_64 => 4096,
+        _ => return Err(Error::Unsupported("CPU architecture")),
+    };
+    let virtual_size = layout
+        .linkedit
+        .vmsize
+        .max(align(linkedit_size, segment_alignment)? as u64);
+    layout
+        .linkedit
+        .vmaddr
+        .checked_add(virtual_size)
+        .ok_or(Error::TooLarge)?;
+    put_le64(&mut output, linkedit_offset + 32, virtual_size);
+
+    output.extend(metadata.build(&output, text_range, layout.info_plist, legacy, true)?);
+    output.resize(final_size, 0);
 
     Ok(output)
 }

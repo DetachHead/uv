@@ -1,0 +1,15 @@
+---
+source: crates/uv-macho/tests/sign.rs
+expression: "failures.join(\"\\n\")"
+---
+blob count: Malformed Mach-O: range extends past its containing data
+blob offset: Malformed Mach-O: invalid signature blob range
+duplicate slot: Malformed Mach-O: duplicate signature slot
+version: Unsupported Mach-O: CodeDirectory version
+flags: Unsupported Mach-O: CodeDirectory flags
+identifier: Malformed Mach-O: invalid signing identifier offset
+special slots: Unsupported Mach-O: CodeDirectory special slots
+page count: Malformed Mach-O: range extends past its containing data
+code limit: Unsupported Mach-O: CodeDirectory does not cover the complete image
+scatter: Unsupported Mach-O: scatter, pre-encryption, linkage, or platform signature
+trailing data: Unsupported Mach-O: code signature is not at the end of __LINKEDIT
