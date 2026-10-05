@@ -56,11 +56,11 @@ use crate::commands::pip::operations::resolve::reporters::ResolverReporter;
 use crate::commands::project::lock_target::{LockTarget, find_lock_format_error};
 use crate::commands::project::{
     LockError, LockValidationError, MissingLockfileSource, ProjectEnvironmentPolicy,
-    ProjectEnvironmentTarget, ProjectInterpreter, ProjectPythonRequest, ScriptInterpreter,
-    init_script_python_requirement,
+    ProjectEnvironmentTarget, ProjectInterpreter,
 };
-use crate::commands::reporters::PythonDownloadReporter;
 use crate::commands::{ScriptPath, pip};
+use uv_python_context::PythonDownloadReporter;
+use uv_python_context::{ProjectPythonRequest, ScriptInterpreter, init_script_python_requirement};
 use uv_settings::{FrozenSource, LockCheck, LockedSource, ResolverSettings};
 
 /// The result of running a lock operation.

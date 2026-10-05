@@ -51,8 +51,9 @@ use uv_workspace::pyproject::ExtraBuildDependencies;
 use uv_workspace::{DiscoveryOptions, Workspace, WorkspaceCache, WorkspaceError};
 
 use crate::commands::pip::operations;
-use crate::commands::project::{EnvironmentError, find_requires_python};
-use crate::commands::reporters::PythonDownloadReporter;
+use crate::commands::project::EnvironmentError;
+use uv_python_context::PythonDownloadReporter;
+use uv_python_context::find_requires_python;
 use uv_settings::ResolverSettings;
 
 #[derive(Debug, Error)]

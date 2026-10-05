@@ -45,7 +45,7 @@ pub(crate) fn hints_for_error(err: &anyhow::Error) -> Hints<'static> {
         collect_hint::<ExtrasWithoutSourceError>(cause, &mut hints);
         collect_hint::<ProjectError>(cause, &mut hints);
         collect_hint::<crate::commands::project::EnvironmentError>(cause, &mut hints);
-        collect_hint::<crate::commands::project::PythonContextError>(cause, &mut hints);
+        collect_hint::<uv_python_context::PythonContextError>(cause, &mut hints);
         collect_hint::<NoExecutablesError>(cause, &mut hints);
         collect_hint::<ExternallyManagedError>(cause, &mut hints);
         collect_hint::<MissingProjectVersionError>(cause, &mut hints);

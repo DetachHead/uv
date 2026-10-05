@@ -1,3 +1,4 @@
+use crate::commands::project::python::from_lockfile;
 use std::fmt::Write;
 use std::path::Path;
 
@@ -35,9 +36,9 @@ use crate::commands::project::lock::{LockMode, LockOperation};
 use crate::commands::project::lock_target::LockTarget;
 use crate::commands::project::lockfile::FrozenWorkspace;
 use crate::commands::project::{
-    ProjectEnvironmentPolicy, ProjectEnvironmentTarget, ProjectInterpreter, ProjectPythonRequest,
-    ScriptInterpreter,
+    ProjectEnvironmentPolicy, ProjectEnvironmentTarget, ProjectInterpreter,
 };
+use uv_python_context::{ProjectPythonRequest, ScriptInterpreter};
 use uv_settings::FrozenSource;
 use uv_settings::LockCheck;
 use uv_settings::ResolverSettings;
@@ -183,7 +184,7 @@ pub(crate) async fn tree(
                 } else {
                     root
                 };
-                let project_python = ProjectPythonRequest::from_lockfile(
+                let project_python = from_lockfile(
                     python.as_deref().map(PythonRequest::parse),
                     InstallTarget::Lockfile {
                         root,

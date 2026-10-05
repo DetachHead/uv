@@ -61,7 +61,7 @@ use crate::commands::pip::operations::resolve::locked_requirements::{
 };
 use crate::commands::pip::operations::resolve::loggers::DefaultResolveLogger;
 use crate::commands::pip::operations::resolve::{resolution_markers, resolution_tags};
-use crate::commands::reporters::PythonDownloadReporter;
+use uv_python_context::PythonDownloadReporter;
 
 /// Resolve a set of requirements into a set of pinned versions.
 #[expect(clippy::fn_params_excessive_bools)]
