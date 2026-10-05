@@ -8,7 +8,6 @@ use uv_configuration::{
     Concurrency, DependencyGroups, DependencyGroupsWithDefaults, DryRun, ExtrasSpecification,
     ExtrasSpecificationWithDefaults, InstallOptions, Reinstall,
 };
-use uv_dispatch::UniversalState;
 use uv_distribution_types::{Dist, Name, ResolvedDist};
 use uv_fs::PortablePathBuf;
 use uv_installer::SitePackages;
@@ -24,6 +23,7 @@ use crate::commands::project::install_target::InstallTarget;
 use crate::commands::project::sync::MalwareCheckContext;
 use crate::commands::project::sync::do_sync;
 use uv_configuration::Modifications;
+use uv_dispatch::UniversalState;
 use uv_install_operations::loggers::DefaultInstallLogger;
 use uv_resolve_operations::{resolution_markers, resolution_tags};
 use uv_settings::{InstallerSettingsRef, ResolverSettings};

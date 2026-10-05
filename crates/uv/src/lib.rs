@@ -43,6 +43,7 @@ use uv_command_support::{ExitStatus, Printer, UvError};
 use uv_configuration::{PythonUpgrade, PythonUpgradeSource, ToolRunCommand};
 use uv_flags::EnvironmentFlags;
 use uv_fs::{CWD, Simplified, normalize_path};
+use uv_lock_operations::LockError;
 #[cfg(feature = "self-update")]
 use uv_pep440::release_specifiers_to_ranges;
 use uv_pep508::VersionOrUrl;
@@ -58,7 +59,7 @@ use uv_threads::{RAYON_PARALLELISM, min_stack_size};
 use uv_warnings::{warn_user, warn_user_once};
 use uv_workspace::{DiscoveryOptions, Workspace, WorkspaceCache};
 
-use crate::commands::{LockError, ParsedRunCommand, ProjectError, RunCommand, ScriptPath};
+use crate::commands::{ParsedRunCommand, ProjectError, RunCommand, ScriptPath};
 
 pub mod commands;
 #[cfg(not(feature = "self-update"))]

@@ -20,7 +20,7 @@ use uv_configuration::{
     DryRun, EditableMode, ExtrasSpecification, ExtrasSpecificationWithDefaults, HashCheckingMode,
     InstallOptions, TargetTriple,
 };
-use uv_dispatch::{BuildDispatch, PlatformState, UniversalState};
+use uv_dispatch::BuildDispatch;
 use uv_distribution::LoweredExtraBuildDependencies;
 use uv_distribution_types::{
     Dist, IndexUrl, Name, NameRequirementSpecification, Resolution, ResolvedDist, SourceDist,
@@ -37,7 +37,6 @@ use uv_python::{
     PythonRequest,
 };
 use uv_redacted::DisplaySafeUrl;
-use uv_requirements::{script_extra_build_requires, script_specification};
 use uv_resolver::FlatIndex;
 use uv_scripts::Pep723Script;
 use uv_settings::{MalwareCheckSettings, PythonInstallMirrors};
@@ -46,21 +45,24 @@ use uv_warnings::{warn_user, warn_user_once};
 use uv_workspace::pyproject::Source;
 use uv_workspace::{DiscoveryOptions, MemberDiscovery, VirtualProject, Workspace, WorkspaceCache};
 
-use crate::commands::project::discovery::DiscoveredProject;
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
-use crate::commands::project::lock::{LockMode, LockOperation, LockResult};
-use crate::commands::project::lock_target::LockTarget;
-use crate::commands::project::lockfile::FrozenWorkspace;
 use crate::commands::project::{
-    EnvironmentError, EnvironmentUpdate, LinkErrorReporting, LockError, MalwareFindings,
-    MissingLockfileSource, ProjectEnvironment, ProjectEnvironmentTarget, ScriptEnvironment,
-    detect_conflicts, update_environment,
+    EnvironmentError, EnvironmentUpdate, LinkErrorReporting, MalwareFindings, ProjectEnvironment,
+    ProjectEnvironmentTarget, ScriptEnvironment, detect_conflicts, update_environment,
 };
 use uv_configuration::Modifications;
+use uv_dispatch::{PlatformState, UniversalState};
 use uv_install_operations::editable::apply_editable_mode;
 use uv_install_operations::loggers::{DefaultInstallLogger, InstallLogger};
 use uv_install_operations::report::{PackageChangesReport, SchemaReport};
 use uv_install_operations::{BytecodeCompilation, Changelog, InstallationPlan};
+use uv_lock_operations::DiscoveredProject;
+use uv_lock_operations::FrozenWorkspace;
+use uv_lock_operations::LockError;
+use uv_lock_operations::LockTarget;
+use uv_lock_operations::MissingLockfileSource;
+use uv_lock_operations::{LockMode, LockOperation, LockResult};
+use uv_requirements::{script_extra_build_requires, script_specification};
 use uv_resolve_operations::loggers::DefaultResolveLogger;
 use uv_resolve_operations::resolution_markers;
 use uv_resolve_operations::resolution_tags;

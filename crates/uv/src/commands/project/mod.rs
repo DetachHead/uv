@@ -49,7 +49,6 @@ use uv_workspace::{ProjectEnvironmentSelection, Workspace, WorkspaceCache};
 
 pub(crate) use self::environment_error::EnvironmentError;
 pub(crate) use self::error::ProjectError;
-pub(crate) use self::lock_error::{LockError, LockValidationError, MissingLockfileSource};
 use crate::commands::capitalize;
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
 use crate::commands::project::python::from_lockfile;
@@ -69,7 +68,6 @@ use uv_settings::{InstallerSettingsRef, ResolverInstallerSettings, ResolverSetti
 pub(crate) mod add;
 pub(crate) mod audit;
 pub(crate) mod check;
-pub(super) mod discovery;
 mod edit;
 pub(crate) mod environment;
 mod environment_error;
@@ -79,9 +77,6 @@ pub(crate) mod format;
 pub(crate) mod init;
 pub(crate) mod install_target;
 pub(crate) mod lock;
-mod lock_error;
-pub(crate) mod lock_target;
-pub(super) mod lockfile;
 mod python;
 pub(crate) mod remove;
 pub(crate) mod run;

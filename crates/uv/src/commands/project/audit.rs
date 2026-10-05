@@ -3,14 +3,14 @@ use owo_colors::OwoColorize;
 use std::fmt::Write as _;
 use std::path::Path;
 
-use crate::commands::project::lock::{LockMode, LockOperation};
-use crate::commands::project::lock_target::LockTarget;
 use crate::commands::project::{
     ProjectEnvironmentPolicy, ProjectEnvironmentTarget, ProjectInterpreter,
 };
 use crate::commands::reporters::AuditReporter;
 use uv_command_support::{ExitStatus, Printer, UvError};
 use uv_dispatch::UniversalState;
+use uv_lock_operations::LockTarget;
+use uv_lock_operations::{LockMode, LockOperation};
 use uv_python_context::{ProjectPythonRequest, ScriptInterpreter};
 use uv_resolve_operations::loggers::DefaultResolveLogger;
 use uv_resolve_operations::resolution_markers;

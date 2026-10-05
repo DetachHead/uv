@@ -20,6 +20,7 @@ pub(crate) use pip::show::pip_show;
 pub(crate) use pip::sync::pip_sync;
 pub(crate) use pip::tree::pip_tree;
 pub(crate) use pip::uninstall::pip_uninstall;
+pub(crate) use project::ProjectError;
 pub(crate) use project::add::add;
 pub(crate) use project::audit::audit;
 pub(crate) use project::check::check;
@@ -33,7 +34,6 @@ pub(crate) use project::sync::sync;
 pub(crate) use project::tree::tree;
 pub(crate) use project::upgrade::upgrade;
 pub(crate) use project::version::project_version;
-pub(crate) use project::{LockError, ProjectError};
 pub(crate) use publish::publish;
 pub(crate) use python::dir::dir as python_dir;
 pub(crate) use python::find::find as python_find;
@@ -88,11 +88,12 @@ mod workspace;
 #[cfg(test)]
 mod error_tests {
     use super::project;
-    use crate::commands::project::{EnvironmentError, LockError};
+    use crate::commands::project::EnvironmentError;
     use anyhow::bail;
     use insta::{allow_duplicates, assert_snapshot};
     use std::io::{Error, ErrorKind};
     use uv_command_support::UvError;
+    use uv_lock_operations::LockError;
     use uv_settings::{LockedFlag, LockedSource};
 
     #[test]
