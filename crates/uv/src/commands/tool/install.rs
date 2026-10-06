@@ -36,12 +36,13 @@ use uv_warnings::{warn_user, warn_user_once, warn_user_with_chain};
 use uv_workspace::WorkspaceCache;
 
 use crate::commands::ExitStatus;
-use crate::commands::pip::latest::LatestClient;
-use crate::commands::pip::loggers::{
-    DefaultInstallLogger, DefaultResolveLogger, SummaryResolveLogger,
+use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
+use crate::commands::pip::operations::resolve::latest::LatestClient;
+use crate::commands::pip::operations::resolve::loggers::{
+    DefaultResolveLogger, SummaryResolveLogger,
 };
+use crate::commands::pip::operations::resolve::{resolution_markers, resolution_tags};
 use crate::commands::pip::operations::{self, Modifications};
-use crate::commands::pip::{resolution_markers, resolution_tags};
 use crate::commands::project::{
     EnvironmentResolution, EnvironmentSpecification, ProjectError, resolve_environment,
     resolve_names, sync_environment, update_environment,
@@ -155,7 +156,7 @@ pub(crate) async fn install(
     .into_interpreter();
 
     let receipt_build_constraints =
-        operations::read_constraints(build_constraints, &client_builder).await?;
+        operations::resolve::read_constraints(build_constraints, &client_builder).await?;
     let build_constraints =
         Constraints::from_specifications(receipt_build_constraints.iter().cloned());
 
@@ -941,7 +942,7 @@ pub(crate) async fn install(
             let (resolution, interpreter) = match resolution {
                 Ok(resolution) => (resolution, interpreter),
                 Err(err) => match err {
-                    ProjectError::Operation(err) => {
+                    ProjectError::Resolve(err) => {
                         // If the resolution failed due to the discovered interpreter not satisfying the
                         // `requires-python` constraint, we can try to refine the interpreter.
                         //

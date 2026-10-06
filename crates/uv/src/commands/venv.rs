@@ -38,8 +38,9 @@ use uv_warnings::warn_user;
 use uv_workspace::{DiscoveryOptions, VirtualProject, WorkspaceCache, WorkspaceErrorKind};
 
 use crate::commands::ExitStatus;
-use crate::commands::pip::loggers::{DefaultInstallLogger, InstallLogger};
-use crate::commands::pip::operations::{Changelog, report_interpreter};
+use crate::commands::pip::operations::install::Changelog;
+use crate::commands::pip::operations::install::loggers::{DefaultInstallLogger, InstallLogger};
+use crate::commands::pip::operations::report_interpreter;
 use crate::commands::project::{
     LinkErrorReporting, ProjectEnvironmentTarget, ProjectPythonRequest,
     centralized_environment_root, centralized_environments_enabled,

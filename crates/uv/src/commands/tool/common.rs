@@ -595,8 +595,9 @@ impl ToolLock {
             }
         }
 
-        let markers = pip::resolution_markers(None, python_platform, interpreter);
-        let tags = pip::resolution_tags(None, python_platform, interpreter)?;
+        let markers =
+            pip::operations::resolve::resolution_markers(None, python_platform, interpreter);
+        let tags = pip::operations::resolve::resolution_tags(None, python_platform, interpreter)?;
         Ok(ToolLockInstallTarget {
             tool_lock: self,
             project_name,
@@ -642,7 +643,7 @@ pub(crate) fn tool_environment_spec<'lock>(
 pub(crate) async fn refine_interpreter(
     interpreter: &Interpreter,
     python_request: Option<&PythonRequest>,
-    err: &pip::operations::Error,
+    err: &pip::operations::resolve::Error,
     client_builder: &BaseClientBuilder<'_>,
     reporter: &PythonDownloadReporter,
     install_mirrors: &PythonInstallMirrors,

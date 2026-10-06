@@ -73,7 +73,7 @@ pub(crate) enum Error {
     #[error(transparent)]
     Extract(#[from] uv_extract::Error),
     #[error(transparent)]
-    Operations(#[from] operations::Error),
+    Operations(#[from] operations::resolve::Error),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
     #[error(transparent)]
@@ -656,7 +656,7 @@ async fn build_package(
 
     // Read build constraints.
     let command_line_constraints =
-        operations::read_constraints(build_constraints, &client_builder).await?;
+        operations::resolve::read_constraints(build_constraints, &client_builder).await?;
     let build_constraints = Constraints::from_specifications(
         command_line_constraints
             .iter()

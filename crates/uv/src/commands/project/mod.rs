@@ -55,9 +55,14 @@ use uv_warnings::{warn_user, warn_user_once};
 use uv_workspace::dependency_groups::DependencyGroupError;
 use uv_workspace::{ProjectEnvironmentSelection, RequiresPythonSources, Workspace, WorkspaceCache};
 
-use crate::commands::locked_requirements::{LockedRequirements, read_lock_requirements};
-use crate::commands::pip::loggers::{InstallLogger, ResolveLogger};
-use crate::commands::pip::operations::{Changelog, Modifications};
+use crate::commands::pip::operations::Modifications;
+use crate::commands::pip::operations::install::Changelog;
+use crate::commands::pip::operations::install::loggers::InstallLogger;
+use crate::commands::pip::operations::resolve::locked_requirements::{
+    LockedRequirements, read_lock_requirements,
+};
+use crate::commands::pip::operations::resolve::loggers::ResolveLogger;
+use crate::commands::pip::operations::resolve::reporters::ResolverReporter;
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
 use crate::commands::project::python::{
     CompatibleProjectPython, PythonRequirementSource, format_requires_python_sources,
@@ -66,7 +71,7 @@ use crate::commands::project::python::{
 pub(crate) use crate::commands::project::python::{
     ProjectPythonRequest, PythonRequestSource, PythonRequirementConflicts, find_requires_python,
 };
-use crate::commands::reporters::{PythonDownloadReporter, ResolverReporter};
+use crate::commands::reporters::PythonDownloadReporter;
 use crate::commands::{capitalize, conjunction, pip};
 use crate::printer::Printer;
 use crate::settings::{
@@ -319,7 +324,10 @@ pub(crate) enum ProjectError {
     Lock(#[from] uv_lock::LockError),
 
     #[error(transparent)]
-    Operation(#[from] pip::operations::Error),
+    Resolve(#[from] crate::commands::pip::operations::resolve::Error),
+
+    #[error(transparent)]
+    Install(#[from] crate::commands::pip::operations::install::Error),
 
     #[error(transparent)]
     Interpreter(#[from] uv_python::InterpreterError),
@@ -437,7 +445,8 @@ impl uv_errors::Hinted for ProjectError {
             }
             Self::Lock(err) => err.hints(),
             Self::Python(err) => err.hints(),
-            Self::Operation(err) => err.hints(),
+            Self::Resolve(err) => err.hints(),
+            Self::Install(err) => err.hints(),
             Self::Client(err) => uv_errors::Hinted::hints(err),
             _ => uv_errors::Hints::none(),
         }
@@ -2393,8 +2402,10 @@ pub(crate) async fn resolve_environment(
     // Determine the tags and marker environment to use for resolution.
     let (tags, resolver_environment) = match resolution_scope {
         EnvironmentResolution::Specific => {
-            let tags = pip::resolution_tags(None, python_platform, interpreter)?;
-            let marker_environment = pip::resolution_markers(None, python_platform, interpreter);
+            let tags =
+                pip::operations::resolve::resolution_tags(None, python_platform, interpreter)?;
+            let marker_environment =
+                pip::operations::resolve::resolution_markers(None, python_platform, interpreter);
             (
                 Some(tags),
                 ResolverEnvironment::specific(marker_environment),
@@ -2540,7 +2551,7 @@ pub(crate) async fn resolve_environment(
     );
 
     // Resolve the requirements.
-    Ok(pip::operations::resolve(
+    Ok(pip::operations::resolve::resolve(
         requirements,
         constraints,
         overrides,
@@ -2681,7 +2692,7 @@ pub(crate) async fn sync_environment(
     );
 
     // Sync the environment.
-    pip::operations::install(
+    pip::operations::install::install(
         resolution,
         site_packages,
         InstallationStrategy::Permissive,
@@ -2689,7 +2700,7 @@ pub(crate) async fn sync_environment(
         reinstall,
         build_options,
         link_mode,
-        compile_bytecode.then_some(pip::operations::BytecodeCompilation::All),
+        compile_bytecode.then_some(pip::operations::install::BytecodeCompilation::All),
         &hasher,
         tags,
         &client,
@@ -2707,7 +2718,7 @@ pub(crate) async fn sync_environment(
     .await?;
 
     // Notify the user of any resolution diagnostics.
-    pip::operations::diagnose_resolution(resolution.diagnostics(), printer)?;
+    pip::operations::resolve::diagnose_resolution(resolution.diagnostics(), printer)?;
 
     Ok(venv)
 }
@@ -2796,8 +2807,9 @@ pub(crate) async fn update_environment(
 
     // Determine markers and tags to use for resolution.
     let interpreter = venv.interpreter();
-    let marker_env = pip::resolution_markers(None, python_platform, interpreter);
-    let tags = pip::resolution_tags(None, python_platform, interpreter)?;
+    let marker_env =
+        pip::operations::resolve::resolution_markers(None, python_platform, interpreter);
+    let tags = pip::operations::resolve::resolution_tags(None, python_platform, interpreter)?;
 
     // Check if the current environment satisfies the requirements
     let site_packages = SitePackages::from_environment(&venv)?;
@@ -2938,7 +2950,7 @@ pub(crate) async fn update_environment(
     );
 
     // Resolve the requirements.
-    let (resolution, hasher) = match pip::operations::resolve(
+    let (resolution, hasher) = match pip::operations::resolve::resolve(
         requirements,
         constraints,
         overrides,
@@ -2975,7 +2987,7 @@ pub(crate) async fn update_environment(
         Err(err) => return Err(err.into()),
     };
     // Sync the environment.
-    let changelog = pip::operations::install(
+    let changelog = pip::operations::install::install(
         &resolution,
         site_packages,
         InstallationStrategy::Permissive,
@@ -2983,7 +2995,7 @@ pub(crate) async fn update_environment(
         reinstall,
         build_options,
         *link_mode,
-        (*compile_bytecode).then_some(pip::operations::BytecodeCompilation::All),
+        (*compile_bytecode).then_some(pip::operations::install::BytecodeCompilation::All),
         &hasher,
         &tags,
         &client,
@@ -3001,7 +3013,7 @@ pub(crate) async fn update_environment(
     .await?;
 
     // Notify the user of any resolution diagnostics.
-    pip::operations::diagnose_resolution(resolution.diagnostics(), printer)?;
+    pip::operations::resolve::diagnose_resolution(resolution.diagnostics(), printer)?;
 
     Ok(EnvironmentUpdate {
         environment: venv,

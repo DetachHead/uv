@@ -19,9 +19,9 @@ use uv_python::PythonEnvironment;
 use uv_settings::MalwareCheckSettings;
 use uv_workspace::WorkspaceCache;
 
-use crate::commands::pip::loggers::DefaultInstallLogger;
 use crate::commands::pip::operations::Modifications;
-use crate::commands::pip::{resolution_markers, resolution_tags};
+use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
+use crate::commands::pip::operations::resolve::{resolution_markers, resolution_tags};
 use crate::commands::project::install_target::InstallTarget;
 use crate::commands::project::sync::MalwareCheckContext;
 use crate::commands::project::sync::do_sync;

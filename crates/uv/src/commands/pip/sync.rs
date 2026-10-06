@@ -44,10 +44,14 @@ use uv_workspace::WorkspaceCache;
 use uv_workspace::pyproject::ExtraBuildDependencies;
 
 use crate::commands::install_report::write_install_report;
-use crate::commands::pip::loggers::{DefaultInstallLogger, DefaultResolveLogger};
-use crate::commands::pip::operations::{Changelog, Modifications};
-use crate::commands::pip::operations::{report_interpreter, report_target_environment};
-use crate::commands::pip::{operations, resolution_markers, resolution_tags};
+use crate::commands::pip::operations;
+use crate::commands::pip::operations::Modifications;
+use crate::commands::pip::operations::install::Changelog;
+use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
+use crate::commands::pip::operations::report_interpreter;
+use crate::commands::pip::operations::resolve::loggers::DefaultResolveLogger;
+use crate::commands::pip::operations::resolve::{resolution_markers, resolution_tags};
+use crate::commands::pip::reporters::report_target_environment;
 use crate::commands::pylock::{read_pylock_toml, resolve_pylock_toml};
 use crate::commands::reporters::PythonDownloadReporter;
 use crate::commands::{ExitStatus, UvError};
@@ -133,7 +137,7 @@ pub(crate) async fn pip_sync(
         no_binary,
         no_build,
         extras: _,
-    } = operations::read_requirements(
+    } = operations::resolve::read_requirements(
         requirements,
         constraints,
         overrides,
@@ -157,7 +161,7 @@ pub(crate) async fn pip_sync(
 
     // Read build constraints.
     let build_constraints = Constraints::from_specifications(
-        operations::read_constraints(build_constraints, &client_builder).await?,
+        operations::resolve::read_constraints(build_constraints, &client_builder).await?,
     );
 
     // Validate that the requirements are non-empty.
@@ -445,7 +449,7 @@ pub(crate) async fn pip_sync(
             .build_options(build_options.clone())
             .build();
 
-        let (resolution, hasher) = match operations::resolve(
+        let (resolution, hasher) = match operations::resolve::resolve(
             requirements,
             constraints,
             overrides,
@@ -518,7 +522,7 @@ pub(crate) async fn pip_sync(
     );
 
     // Sync the environment.
-    let changelog = match operations::install(
+    let changelog = match operations::install::install(
         &resolution,
         site_packages,
         InstallationStrategy::Permissive,
@@ -526,7 +530,7 @@ pub(crate) async fn pip_sync(
         &reinstall,
         &build_options,
         link_mode,
-        compile.then_some(operations::BytecodeCompilation::All),
+        compile.then_some(operations::install::BytecodeCompilation::All),
         &hasher,
         &tags,
         &client,
@@ -544,7 +548,7 @@ pub(crate) async fn pip_sync(
     .await
     {
         Ok(changelog) => changelog,
-        Err(operations::Error::OutdatedEnvironment(changelog)) => {
+        Err(operations::install::Error::OutdatedEnvironment(changelog)) => {
             write_install_report(&changelog, dry_run, output_format, printer)?;
             return Ok(ExitStatus::Failure);
         }
@@ -554,11 +558,11 @@ pub(crate) async fn pip_sync(
     };
 
     // Notify the user of any resolution diagnostics.
-    operations::diagnose_resolution(resolution.diagnostics(), printer)?;
+    operations::resolve::diagnose_resolution(resolution.diagnostics(), printer)?;
 
     // Notify the user of any environment diagnostics.
     if strict && !dry_run.enabled() {
-        operations::diagnose_environment(
+        operations::install::diagnose_environment(
             resolution.distributions().map(Name::name),
             &environment,
             &marker_env,

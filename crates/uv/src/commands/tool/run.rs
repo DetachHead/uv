@@ -49,11 +49,14 @@ use crate::child::run_to_completion;
 use crate::commands::ExitStatus;
 
 use crate::commands::pip;
-use crate::commands::pip::latest::LatestClient;
-use crate::commands::pip::loggers::{
-    DefaultInstallLogger, DefaultResolveLogger, SummaryInstallLogger, SummaryResolveLogger,
-};
 use crate::commands::pip::operations;
+use crate::commands::pip::operations::install::loggers::{
+    DefaultInstallLogger, SummaryInstallLogger,
+};
+use crate::commands::pip::operations::resolve::latest::LatestClient;
+use crate::commands::pip::operations::resolve::loggers::{
+    DefaultResolveLogger, SummaryResolveLogger,
+};
 use crate::commands::project::{EnvironmentSpecification, ProjectError, resolve_names};
 use crate::commands::reporters::PythonDownloadReporter;
 use crate::commands::tool::common::{ToolPython, matching_packages, refine_interpreter};
@@ -335,11 +338,20 @@ pub(crate) async fn run(
     let explicit_from = from.is_some();
     let (from, environment) = match result {
         Ok(resolution) => resolution,
-        Err(ProjectError::Operation(err)) => {
+        Err(err @ (ProjectError::Resolve(_) | ProjectError::Install(_))) => {
+            let uvx_run =
+                from.is_none() && invocation_source == ToolRunCommand::Uvx && target == "run";
+            let verbose_flag = find_verbose_flag(args);
+            let err = match err {
+                ProjectError::Resolve(err) if uvx_run || verbose_flag.is_none() => {
+                    UvError::from(err.with_resolution_context("tool"))
+                }
+                err => UvError::from(err),
+            };
             // If the user ran `uvx run ...`, the `run` is likely a mistake. Show a dedicated hint.
-            if from.is_none() && invocation_source == ToolRunCommand::Uvx && target == "run" {
+            if uvx_run {
                 let rest = args.iter().map(|s| s.to_string_lossy()).join(" ");
-                return Err(UvError::from(err.with_resolution_context("tool"))
+                return Err(err
                     .map_user(|cause| {
                         ToolRunUsageError {
                             cause,
@@ -350,8 +362,8 @@ pub(crate) async fn run(
                     .into());
             }
 
-            if let Some(verbose_flag) = find_verbose_flag(args) {
-                return Err(UvError::from(err)
+            if let Some(verbose_flag) = verbose_flag {
+                return Err(err
                     .map_user(|cause| {
                         ToolRunUsageError {
                             cause,
@@ -366,12 +378,12 @@ pub(crate) async fn run(
                     .into());
             }
 
-            return Err(UvError::from(err.with_resolution_context("tool")).into());
+            return Err(err.into());
         }
 
         Err(ProjectError::Requirements(err)) => {
             return Err(UvError::from(
-                operations::Error::Requirements(err).with_resolution_context("`--with`"),
+                operations::resolve::Error::Requirements(err).with_resolution_context("`--with`"),
             )
             .into());
         }
@@ -834,7 +846,7 @@ async fn get_or_create_environment(
     .into_interpreter();
 
     let build_constraints = Constraints::from_specifications(
-        operations::read_constraints(build_constraints, client_builder).await?,
+        operations::resolve::read_constraints(build_constraints, client_builder).await?,
     );
 
     let from = match request {
@@ -1125,9 +1137,16 @@ async fn get_or_create_environment(
                     .into_inner();
 
                     // Determine the markers and tags to use for the resolution.
-                    let markers =
-                        pip::resolution_markers(None, python_platform.as_ref(), &interpreter);
-                    let tags = pip::resolution_tags(None, python_platform.as_ref(), &interpreter)?;
+                    let markers = pip::operations::resolve::resolution_markers(
+                        None,
+                        python_platform.as_ref(),
+                        &interpreter,
+                    );
+                    let tags = pip::operations::resolve::resolution_tags(
+                        None,
+                        python_platform.as_ref(),
+                        &interpreter,
+                    )?;
 
                     // Check if the installed packages meet the requirements.
                     let site_packages = SitePackages::from_environment(environment.environment())?;
@@ -1212,7 +1231,7 @@ async fn get_or_create_environment(
     let environment = match result {
         Ok(environment) => environment,
         Err(err) => match err {
-            ProjectError::Operation(err) => {
+            ProjectError::Resolve(err) => {
                 // If the resolution failed due to the discovered interpreter not satisfying the
                 // `requires-python` constraint, we can try to refine the interpreter.
                 //

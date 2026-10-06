@@ -31,8 +31,9 @@ use uv_workspace::{
     pyproject_mut::{DependencyTarget, PyProjectTomlMut},
 };
 
-use crate::commands::pip::loggers::{DefaultInstallLogger, DefaultResolveLogger};
 use crate::commands::pip::operations::Modifications;
+use crate::commands::pip::operations::install::loggers::DefaultInstallLogger;
+use crate::commands::pip::operations::resolve::loggers::DefaultResolveLogger;
 use crate::commands::project::edit::{ProjectEdit, PythonTarget};
 use crate::commands::project::install_target::{InstallTarget, PackageSelection};
 use crate::commands::project::lock::LockMode;
