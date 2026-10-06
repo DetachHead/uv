@@ -51,7 +51,8 @@ use uv_warnings::{warn_user, warn_user_once};
 use uv_workspace::{DiscoveryOptions, Workspace, WorkspaceCache};
 
 use crate::commands::{
-    ExitStatus, ParsedRunCommand, ProjectError, RunCommand, ScriptPath, ToolRunCommand, UvError,
+    ExitStatus, LockError, ParsedRunCommand, ProjectError, RunCommand, ScriptPath, ToolRunCommand,
+    UvError,
 };
 use crate::printer::Printer;
 use crate::settings::{
@@ -3147,7 +3148,10 @@ where
                 Err(err)
                     if matches!(
                         err.downcast_ref::<ProjectError>(),
-                        Some(ProjectError::LockFormat(..))
+                        Some(ProjectError::Lock(LockError::LockFormat(..)))
+                    ) || matches!(
+                        err.downcast_ref::<LockError>(),
+                        Some(LockError::LockFormat(..))
                     ) =>
                 {
                     UvError::User(err)

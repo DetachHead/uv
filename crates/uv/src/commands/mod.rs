@@ -29,7 +29,6 @@ pub(crate) use pip::show::pip_show;
 pub(crate) use pip::sync::pip_sync;
 pub(crate) use pip::tree::pip_tree;
 pub(crate) use pip::uninstall::pip_uninstall;
-pub(crate) use project::ProjectError;
 pub(crate) use project::add::add;
 pub(crate) use project::audit::audit;
 pub(crate) use project::check::check;
@@ -43,6 +42,7 @@ pub(crate) use project::sync::sync;
 pub(crate) use project::tree::tree;
 pub(crate) use project::upgrade::upgrade;
 pub(crate) use project::version::project_version;
+pub(crate) use project::{LockError, ProjectError};
 pub(crate) use publish::publish;
 pub(crate) use python::dir::dir as python_dir;
 pub(crate) use python::find::find as python_find;
@@ -155,66 +155,60 @@ impl UvError {
     }
 }
 
-impl From<project::ProjectError> for UvError {
-    fn from(error: project::ProjectError) -> Self {
-        match error {
-            error @ (project::ProjectError::LockMismatch(..)
-            | project::ProjectError::LockFormat(..)
-            | project::ProjectError::MissingLockfile(..)
-            | project::ProjectError::LockWorkspaceMismatch(..)) => Self::user(error),
-            project::ProjectError::Resolve(error) => Self::from(error),
-            project::ProjectError::Install(error) => Self::from(error),
-            project::ProjectError::Requirements(error) => {
-                Self::from(pip::operations::resolve::Error::Requirements(error))
-            }
-            error => Self::unexpected(error.into()),
-        }
-    }
-}
-
 #[cfg(test)]
 mod error_tests {
-    use std::io::{Error, ErrorKind};
-
+    use super::{UvError, project};
+    use crate::commands::pip::operations::resolve::Error as ResolveError;
+    use crate::commands::project::{EnvironmentError, LockError};
+    use crate::settings::{LockedFlag, LockedSource};
     use anyhow::bail;
     use insta::{allow_duplicates, assert_snapshot};
-
-    use super::{UvError, pip, project};
+    use std::io::{Error, ErrorKind};
 
     #[test]
     fn contextual_operations_keep_their_classification_and_cause() -> anyhow::Result<()> {
-        for (kind, user_failure) in [
-            (ErrorKind::NotFound, true),
-            (ErrorKind::PermissionDenied, false),
-        ] {
-            let error = pip::operations::resolve::Error::Requirements(uv_requirements::Error::Io(
-                Error::new(kind, "requirements failure"),
-            ));
-            let error = UvError::from(
-                error
-                    .with_resolution_context("script")
-                    .with_resolution_context("tool"),
-            );
-            let ((UvError::User(error), true) | (UvError::Unexpected(error), false)) =
-                (error, user_failure)
-            else {
-                bail!("operation classification changed with context");
-            };
-            allow_duplicates! {
-                assert_snapshot!(format!("{error:#}"), @"Failed to resolve tool requirement: requirements failure");
+        let conversions: [fn(ResolveError) -> UvError; 5] = [
+            UvError::from,
+            |error| UvError::from(EnvironmentError::from(error)),
+            |error| UvError::from(LockError::from(error)),
+            |error| UvError::from(project::ProjectError::from(LockError::from(error))),
+            |error| UvError::from(project::ProjectError::from(EnvironmentError::from(error))),
+        ];
+        for convert in conversions {
+            for (kind, user_failure) in [
+                (ErrorKind::NotFound, true),
+                (ErrorKind::PermissionDenied, false),
+            ] {
+                let error = ResolveError::Requirements(uv_requirements::Error::Io(Error::new(
+                    kind,
+                    "requirements failure",
+                )));
+                let error = convert(
+                    error
+                        .with_resolution_context("script")
+                        .with_resolution_context("tool"),
+                );
+                let ((UvError::User(error), true) | (UvError::Unexpected(error), false)) =
+                    (error, user_failure)
+                else {
+                    bail!("operation classification changed with context");
+                };
+                allow_duplicates! {
+                    assert_snapshot!(format!("{error:#}"), @"Failed to resolve tool requirement: requirements failure");
+                }
+                assert!(
+                    error
+                        .chain()
+                        .any(<dyn std::error::Error>::is::<uv_requirements::Error>)
+                );
             }
-            assert!(
-                error
-                    .downcast_ref::<pip::operations::resolve::Error>()
-                    .is_some()
-            );
         }
         Ok(())
     }
 
     #[test]
     fn resolution_context_leaves_other_errors_unchanged() -> anyhow::Result<()> {
-        let error = pip::operations::resolve::Error::Io(Error::new(
+        let error = ResolveError::Io(Error::new(
             ErrorKind::PermissionDenied,
             "cache write failed",
         ));
@@ -223,21 +217,36 @@ mod error_tests {
             bail!("operation classification changed with context");
         };
         assert_snapshot!(format!("{error:#}"), @"cache write failed");
-        assert!(
-            error
-                .downcast_ref::<pip::operations::resolve::Error>()
-                .is_some()
-        );
+        assert!(error.downcast_ref::<ResolveError>().is_some());
         Ok(())
     }
 
     #[test]
-    fn project_requirements_use_operation_classification() {
-        let error = project::ProjectError::Requirements(uv_requirements::Error::Io(Error::new(
+    fn project_errors_use_shared_operation_classification() -> anyhow::Result<()> {
+        let error = EnvironmentError::Requirements(uv_requirements::Error::Io(Error::new(
             ErrorKind::NotFound,
             "requirements failure",
         )));
-        assert!(matches!(UvError::from(error), UvError::User(_)));
+        assert!(matches!(
+            UvError::from(project::ProjectError::from(error)),
+            UvError::User(_)
+        ));
+
+        let conversions: [fn(LockError) -> UvError; 2] = [UvError::from, |error| {
+            UvError::from(project::ProjectError::from(error))
+        }];
+        for convert in conversions {
+            let error =
+                LockError::LockFormat("uv.lock".into(), 3, LockedSource::Cli(LockedFlag::Check));
+            let UvError::User(error) = convert(error) else {
+                bail!("lock policy errors must be classified as user failures");
+            };
+            allow_duplicates! {
+                assert_snapshot!(format!("{error:#}"), @"The lockfile at `uv.lock` has non-canonical formatting at line 3, but `--check` was provided.");
+            }
+            assert!(error.downcast_ref::<LockError>().is_some());
+        }
+        Ok(())
     }
 }
 
